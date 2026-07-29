@@ -1,7 +1,7 @@
 use std::{io, time::Duration};
 
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -29,6 +29,38 @@ struct App {
     scroll: u16,
     should_quit: bool,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Action {
+    Quit,
+    ScrollDown(u16),
+    ScrollUp(u16),
+    JumpToTop,
+    JumpToBottom,
+    NextFile,
+    PreviousFile,
+}
+
+impl TryFrom<KeyEvent> for Action {
+    type Error = eyre::Report;
+
+    fn try_from(event: KeyEvent) -> std::prelude::v1::Result<Self, Self::Error> {
+        match event.code {
+            KeyCode::Char('q') | KeyCode::Esc => Ok(Action::Quit),
+            KeyCode::Char('j') | KeyCode::Down => Ok(Action::ScrollDown(1)),
+            KeyCode::Char('k') | KeyCode::Up => Ok(Action::ScrollUp(1)),
+            KeyCode::Char('d') | KeyCode::PageDown => Ok(Action::ScrollDown(PAGE_SCROLL_LINES)),
+            KeyCode::Char('u') | KeyCode::PageUp => Ok(Action::ScrollUp(PAGE_SCROLL_LINES)),
+            KeyCode::Char('g') | KeyCode::Home => Ok(Action::JumpToTop),
+            KeyCode::Char('G') | KeyCode::End => Ok(Action::JumpToBottom),
+            KeyCode::Char('n') | KeyCode::Tab => Ok(Action::NextFile),
+            KeyCode::Char('p') | KeyCode::BackTab => Ok(Action::PreviousFile),
+            _ => Err(eyre::eyre!("invalid keycode")),
+        }
+    }
+}
+
+const PAGE_SCROLL_LINES: u16 = 20;
 
 impl App {
     fn new(diff: String) -> Self {
@@ -84,6 +116,24 @@ impl App {
             self.selected_file = index;
         }
     }
+
+    fn apply(&mut self, action: Action) {
+        match action {
+            Action::Quit => self.should_quit = true,
+            Action::ScrollDown(amount) => self.scroll_down(amount),
+            Action::ScrollUp(amount) => self.scroll_up(amount),
+            Action::JumpToTop => {
+                self.scroll = 0;
+                self.selected_file = 0;
+            }
+            Action::JumpToBottom => {
+                self.scroll = self.lines.len().saturating_sub(1).min(u16::MAX as usize) as u16;
+                self.sync_selected_file_to_scroll();
+            }
+            Action::NextFile => self.next_file(),
+            Action::PreviousFile => self.previous_file(),
+        }
+    }
 }
 
 pub fn run(diff: String) -> Result<()> {
@@ -118,23 +168,8 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
                 continue;
             }
 
-            match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
-                KeyCode::Char('j') | KeyCode::Down => app.scroll_down(1),
-                KeyCode::Char('k') | KeyCode::Up => app.scroll_up(1),
-                KeyCode::Char('d') | KeyCode::PageDown => app.scroll_down(20),
-                KeyCode::Char('u') | KeyCode::PageUp => app.scroll_up(20),
-                KeyCode::Char('g') | KeyCode::Home => {
-                    app.scroll = 0;
-                    app.selected_file = 0;
-                }
-                KeyCode::Char('G') | KeyCode::End => {
-                    app.scroll = app.lines.len().saturating_sub(1).min(u16::MAX as usize) as u16;
-                    app.sync_selected_file_to_scroll();
-                }
-                KeyCode::Char('n') | KeyCode::Tab => app.next_file(),
-                KeyCode::Char('p') | KeyCode::BackTab => app.previous_file(),
-                _ => {}
+            if let Ok(action) = Action::try_from(key) {
+                app.apply(action);
             }
         }
     }
