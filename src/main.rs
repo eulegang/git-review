@@ -1,5 +1,6 @@
 mod cli;
 mod diff;
+mod tui;
 
 use cli::Cli;
 use diff::run_git_diff;
@@ -9,7 +10,5 @@ fn main() -> Result<()> {
     let mode = Cli::parse_args().diff_mode()?;
     let output = run_git_diff(&mode)?;
 
-    print!("{output}");
-
-    Ok(())
+    tui::run(output)
 }

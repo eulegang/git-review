@@ -1,5 +1,5 @@
-use crate::cli::DiffMode;
-use eyre::{Context, Result, bail};
+use crate::cli::{DiffMode, Revision};
+use eyre::{Context, Result};
 use git2::{DiffFormat, DiffLineType, DiffOptions, Repository, Tree};
 
 pub fn run_git_diff(mode: &DiffMode) -> Result<String> {
@@ -23,18 +23,10 @@ pub fn run_git_diff(mode: &DiffMode) -> Result<String> {
 
 fn diff_revision<'repo>(
     repo: &'repo Repository,
-    rev: &str,
+    rev: &Revision,
     options: &mut DiffOptions,
 ) -> Result<git2::Diff<'repo>> {
-    if rev.contains("...") {
-        bail!("triple-dot ranges are not supported yet; use <base>..<head>");
-    }
-
-    if let Some((base, head)) = rev.split_once("..") {
-        if base.is_empty() || head.is_empty() {
-            bail!("range must be in the form <base>..<head>");
-        }
-
+    if let Some((base, head)) = rev.range() {
         let base_tree = rev_to_tree(repo, base)?;
         let head_tree = rev_to_tree(repo, head)?;
 
@@ -43,6 +35,9 @@ fn diff_revision<'repo>(
             .with_context(|| format!("failed to diff range {rev}"));
     }
 
+    let rev = rev
+        .commitish()
+        .expect("revision should be a commitish or range");
     let tree = rev_to_tree(repo, rev)?;
     repo.diff_tree_to_workdir_with_index(Some(&tree), Some(options))
         .with_context(|| format!("failed to diff revision {rev} against working tree"))
