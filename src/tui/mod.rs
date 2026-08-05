@@ -11,9 +11,8 @@ use ratatui::{
     Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    style::{Color, Style},
+    widgets::{Block, Borders, List, ListItem, ListState},
 };
 
 use action::Action;
@@ -22,12 +21,6 @@ use crate::model::Model;
 
 mod action;
 mod diff;
-
-#[derive(Debug, Clone)]
-struct FileSection {
-    name: String,
-    start_line: usize,
-}
 
 #[derive(Debug)]
 pub struct App<'a> {
@@ -158,55 +151,9 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
         .highlight_symbol("› ");
     frame.render_stateful_widget(files, chunks[0], &mut list_state);
 
-    let title = if app.model.entries.is_empty() {
-        "Diff - no changes"
-    } else {
-        "Diff - q quit · j/k scroll · n/p files · g/G top/bottom"
-    };
-
-    let x = Diff {
+    let diff = Diff {
         hunks: &app.model.entries[app.selected_file].hunks,
     };
 
-    frame.render_stateful_widget(x, chunks[1], &mut app.line);
-
-    // let diff = Paragraph::new(styled_diff_lines(&[]))
-    //     .block(Block::default().title(title).borders(Borders::ALL))
-    //     .scroll((app.scroll, 0));
-    // frame.render_widget(diff, chunks[1]);
-}
-
-fn styled_diff_lines(lines: &[String]) -> Vec<Line<'static>> {
-    if lines.is_empty() {
-        return vec![Line::from(Span::styled(
-            "No changes to review.",
-            Style::default().fg(Color::DarkGray),
-        ))];
-    }
-
-    lines.iter().map(|line| styled_diff_line(line)).collect()
-}
-
-fn styled_diff_line(line: &str) -> Line<'static> {
-    let style = if line.starts_with("diff --git")
-        || line.starts_with("index ")
-        || line.starts_with("--- ")
-        || line.starts_with("+++ ")
-    {
-        Style::default()
-            .fg(Color::Blue)
-            .add_modifier(Modifier::BOLD)
-    } else if line.starts_with("@@") {
-        Style::default()
-            .fg(Color::Magenta)
-            .add_modifier(Modifier::BOLD)
-    } else if line.starts_with('+') {
-        Style::default().fg(Color::Green)
-    } else if line.starts_with('-') {
-        Style::default().fg(Color::Red)
-    } else {
-        Style::default()
-    };
-
-    Line::from(Span::styled(line.to_owned(), style))
+    frame.render_stateful_widget(diff, chunks[1], &mut app.line);
 }
