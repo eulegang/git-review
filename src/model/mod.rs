@@ -1,0 +1,126 @@
+use std::path::PathBuf;
+
+use eyre::{Context, Result};
+use git2::{Diff, DiffOptions, Oid, Repository, Tree};
+
+use crate::cli::{DiffMode, Revision};
+
+pub struct Model {
+    pub entries: Vec<Entry>,
+}
+
+pub struct Entry {
+    pub path: PathBuf,
+    pub old: Oid,
+    pub new: Oid,
+    pub hunks: Vec<Hunk>,
+}
+
+#[derive(Default)]
+pub struct Hunk {
+    pub lines: Vec<Line>,
+}
+
+pub enum LineStatus {
+    Add,
+    Remove,
+    Context,
+    Binary,
+}
+
+pub struct Line {
+    pub status: LineStatus,
+    pub content: String,
+}
+
+impl Model {
+    pub fn load(mode: &DiffMode) -> Result<Self> {
+        let repo = Repository::discover(".").context("not inside a Git repository")?;
+        let mut options = DiffOptions::new();
+
+        let diff = match mode {
+            DiffMode::WorkingTree => repo
+                .diff_index_to_workdir(None, Some(&mut options))
+                .context("failed to diff index against working tree")?,
+            DiffMode::Staged => {
+                let head_tree = repo.head().ok().and_then(|head| head.peel_to_tree().ok());
+                repo.diff_tree_to_index(head_tree.as_ref(), None, Some(&mut options))
+                    .context("failed to diff HEAD against index")?
+            }
+            DiffMode::Revision(rev) => diff_revision(&repo, rev, &mut options)?,
+        };
+
+        Model::try_from(diff)
+    }
+}
+
+impl<'a> TryFrom<Diff<'a>> for Model {
+    type Error = eyre::Report;
+
+    fn try_from(diff: Diff<'a>) -> std::prelude::v1::Result<Self, Self::Error> {
+        let mut hunk = Hunk::default();
+
+        diff.print(git2::DiffFormat::Patch, |delta, _hunk, line| {
+            if let Ok(content) = std::str::from_utf8(line.content()) {
+                match line.origin_value() {
+                    git2::DiffLineType::Context => hunk.add(LineStatus::Context, content),
+                    git2::DiffLineType::Addition => hunk.add(LineStatus::Add, content),
+                    git2::DiffLineType::Deletion => hunk.add(LineStatus::Remove, content),
+                    git2::DiffLineType::Binary => hunk.add(LineStatus::Binary, content),
+
+                    git2::DiffLineType::FileHeader => {
+                        dbg!(content);
+                        dbg!(delta.old_file().id());
+                        dbg!(delta.new_file().id());
+                    }
+                    git2::DiffLineType::HunkHeader => (),
+
+                    git2::DiffLineType::ContextEOFNL
+                    | git2::DiffLineType::AddEOFNL
+                    | git2::DiffLineType::DeleteEOFNL => (),
+                }
+            }
+
+            true
+        })
+        .context("failed to render diff")?;
+
+        Ok(Model { entries: vec![] })
+    }
+}
+
+impl Hunk {
+    fn add(&mut self, status: LineStatus, line: &str) {
+        let content = line.to_string();
+        self.lines.push(Line { status, content })
+    }
+}
+
+fn diff_revision<'repo>(
+    repo: &'repo Repository,
+    rev: &Revision,
+    options: &mut DiffOptions,
+) -> Result<git2::Diff<'repo>> {
+    if let Some((base, head)) = rev.range() {
+        let base_tree = rev_to_tree(repo, base)?;
+        let head_tree = rev_to_tree(repo, head)?;
+
+        return repo
+            .diff_tree_to_tree(Some(&base_tree), Some(&head_tree), Some(options))
+            .with_context(|| format!("failed to diff range {rev}"));
+    }
+
+    let rev = rev
+        .commitish()
+        .expect("revision should be a commitish or range");
+    let tree = rev_to_tree(repo, rev)?;
+    repo.diff_tree_to_workdir_with_index(Some(&tree), Some(options))
+        .with_context(|| format!("failed to diff revision {rev} against working tree"))
+}
+
+fn rev_to_tree<'repo>(repo: &'repo Repository, rev: &str) -> Result<Tree<'repo>> {
+    repo.revparse_single(rev)
+        .with_context(|| format!("invalid revision or range endpoint: {rev}"))?
+        .peel_to_tree()
+        .with_context(|| format!("revision does not resolve to a tree: {rev}"))
+}

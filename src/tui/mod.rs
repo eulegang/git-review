@@ -1,7 +1,7 @@
 use std::{io, time::Duration};
 
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
+    event::{self, Event, KeyEventKind},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -14,6 +14,10 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
+
+use action::Action;
+
+mod action;
 
 #[derive(Debug, Clone)]
 struct FileSection {
@@ -29,38 +33,6 @@ struct App {
     scroll: u16,
     should_quit: bool,
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Action {
-    Quit,
-    ScrollDown(u16),
-    ScrollUp(u16),
-    JumpToTop,
-    JumpToBottom,
-    NextFile,
-    PreviousFile,
-}
-
-impl TryFrom<KeyEvent> for Action {
-    type Error = eyre::Report;
-
-    fn try_from(event: KeyEvent) -> std::prelude::v1::Result<Self, Self::Error> {
-        match event.code {
-            KeyCode::Char('q') | KeyCode::Esc => Ok(Action::Quit),
-            KeyCode::Char('j') | KeyCode::Down => Ok(Action::ScrollDown(1)),
-            KeyCode::Char('k') | KeyCode::Up => Ok(Action::ScrollUp(1)),
-            KeyCode::Char('d') | KeyCode::PageDown => Ok(Action::ScrollDown(PAGE_SCROLL_LINES)),
-            KeyCode::Char('u') | KeyCode::PageUp => Ok(Action::ScrollUp(PAGE_SCROLL_LINES)),
-            KeyCode::Char('g') | KeyCode::Home => Ok(Action::JumpToTop),
-            KeyCode::Char('G') | KeyCode::End => Ok(Action::JumpToBottom),
-            KeyCode::Char('n') | KeyCode::Tab => Ok(Action::NextFile),
-            KeyCode::Char('p') | KeyCode::BackTab => Ok(Action::PreviousFile),
-            _ => Err(eyre::eyre!("invalid keycode")),
-        }
-    }
-}
-
-const PAGE_SCROLL_LINES: u16 = 20;
 
 impl App {
     fn new(diff: String) -> Self {
