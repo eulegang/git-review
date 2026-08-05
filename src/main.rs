@@ -1,5 +1,4 @@
 mod cli;
-mod diff;
 mod model;
 mod tui;
 
