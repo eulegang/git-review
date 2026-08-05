@@ -5,6 +5,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+use diff::Diff;
 use eyre::{Context, Result};
 use ratatui::{
     Terminal,
@@ -20,6 +21,7 @@ use action::Action;
 use crate::model::Model;
 
 mod action;
+mod diff;
 
 #[derive(Debug, Clone)]
 struct FileSection {
@@ -31,6 +33,7 @@ struct FileSection {
 pub struct App<'a> {
     model: &'a Model,
     selected_file: usize,
+    line: usize,
     scroll: u16,
     should_quit: bool,
 }
@@ -40,6 +43,7 @@ impl<'a> App<'a> {
         Self {
             model,
             selected_file: 0,
+            line: 0,
             scroll: 0,
             should_quit: false,
         }
@@ -69,25 +73,9 @@ impl<'a> App<'a> {
         self.sync_selected_file_to_scroll();
     }
 
-    fn jump_to_selected_file(&mut self) {
-        todo!("reimplement")
-        // if let Some(file) = self.model.entries.get(self.selected_file) {
-        //     self.scroll = file.start_line.min(u16::MAX as usize) as u16;
-        // }
-    }
+    fn jump_to_selected_file(&mut self) {}
 
-    fn sync_selected_file_to_scroll(&mut self) {
-        todo!("reimplement");
-        // let scroll = usize::from(self.scroll);
-        // if let Some(index) = self
-        //     .model
-        //     .entries
-        //     .iter()
-        //     .rposition(|file| file.start_line <= scroll)
-        // {
-        //     self.selected_file = index;
-        // }
-    }
+    fn sync_selected_file_to_scroll(&mut self) {}
 
     fn apply(&mut self, action: Action) {
         match action {
@@ -98,11 +86,7 @@ impl<'a> App<'a> {
                 self.scroll = 0;
                 self.selected_file = 0;
             }
-            Action::JumpToBottom => {
-                todo!("reimplement");
-                // self.scroll = self.lines.len().saturating_sub(1).min(u16::MAX as usize) as u16;
-                // self.sync_selected_file_to_scroll();
-            }
+            Action::JumpToBottom => {}
             Action::NextFile => self.next_file(),
             Action::PreviousFile => self.previous_file(),
         }
@@ -179,37 +163,17 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
     } else {
         "Diff - q quit · j/k scroll · n/p files · g/G top/bottom"
     };
-    let diff = Paragraph::new(styled_diff_lines(&[]))
-        .block(Block::default().title(title).borders(Borders::ALL))
-        .scroll((app.scroll, 0));
-    frame.render_widget(diff, chunks[1]);
-}
 
-fn find_file_sections(lines: &[String]) -> Vec<FileSection> {
-    let mut files = lines
-        .iter()
-        .enumerate()
-        .filter_map(|(index, line)| {
-            line.strip_prefix("diff --git ").map(|rest| FileSection {
-                name: rest
-                    .split_whitespace()
-                    .nth(1)
-                    .unwrap_or(rest)
-                    .trim_start_matches("b/")
-                    .to_owned(),
-                start_line: index,
-            })
-        })
-        .collect::<Vec<_>>();
+    let x = Diff {
+        hunks: &app.model.entries[app.selected_file].hunks,
+    };
 
-    if files.is_empty() && !lines.is_empty() {
-        files.push(FileSection {
-            name: "Diff".to_owned(),
-            start_line: 0,
-        });
-    }
+    frame.render_stateful_widget(x, chunks[1], &mut app.line);
 
-    files
+    // let diff = Paragraph::new(styled_diff_lines(&[]))
+    //     .block(Block::default().title(title).borders(Borders::ALL))
+    //     .scroll((app.scroll, 0));
+    // frame.render_widget(diff, chunks[1]);
 }
 
 fn styled_diff_lines(lines: &[String]) -> Vec<Line<'static>> {

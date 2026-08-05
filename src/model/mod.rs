@@ -13,7 +13,9 @@ pub struct Model {
 #[derive(Debug)]
 pub struct Entry {
     pub path: PathBuf,
+    #[allow(dead_code)]
     pub old: Oid,
+    #[allow(dead_code)]
     pub new: Oid,
     pub hunks: Vec<Hunk>,
 }
@@ -23,7 +25,7 @@ pub struct Hunk {
     pub lines: Vec<Line>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum LineStatus {
     Add,
     Remove,
@@ -63,6 +65,8 @@ impl<'a> TryFrom<Diff<'a>> for Model {
 
     fn try_from(diff: Diff<'a>) -> std::prelude::v1::Result<Self, Self::Error> {
         let mut name = Option::<PathBuf>::None;
+        let mut new = Oid::zero();
+        let mut old = Oid::zero();
 
         let mut hunk = Hunk::default();
 
@@ -86,12 +90,14 @@ impl<'a> TryFrom<Diff<'a>> for Model {
                             entries.push(Entry {
                                 hunks: std::mem::take(&mut hunks),
                                 path: name.clone(),
-                                old: delta.old_file().id(),
-                                new: delta.new_file().id(),
+                                old,
+                                new,
                             });
                         }
 
                         name = delta.new_file().path().map(ToOwned::to_owned);
+                        new = delta.new_file().id();
+                        old = delta.old_file().id();
                     }
                     git2::DiffLineType::HunkHeader => {
                         if !hunk.is_empty() {
@@ -107,6 +113,17 @@ impl<'a> TryFrom<Diff<'a>> for Model {
             true
         })
         .context("failed to render diff")?;
+
+        if !hunk.is_empty()
+            && let Some(name) = &name
+        {
+            entries.push(Entry {
+                hunks: std::mem::take(&mut hunks),
+                path: name.clone(),
+                old,
+                new,
+            })
+        }
 
         Ok(Model { entries })
     }
