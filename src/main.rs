@@ -13,7 +13,6 @@ fn main() -> Result<()> {
 
     dbg!(&model);
 
-    //return Ok(());
     let mut app = App::new(&model);
 
     app.run()
