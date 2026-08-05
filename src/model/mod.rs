@@ -114,9 +114,13 @@ impl<'a> TryFrom<Diff<'a>> for Model {
         })
         .context("failed to render diff")?;
 
-        if !hunk.is_empty()
+        if (!hunk.is_empty() || !hunks.is_empty())
             && let Some(name) = &name
         {
+            if !hunk.is_empty() {
+                hunks.push(std::mem::take(&mut hunk));
+            }
+
             entries.push(Entry {
                 hunks: std::mem::take(&mut hunks),
                 path: name.clone(),
