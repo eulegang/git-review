@@ -5,10 +5,12 @@ use git2::{Diff, DiffOptions, Oid, Repository, Tree};
 
 use crate::cli::{DiffMode, Revision};
 
+#[derive(Debug)]
 pub struct Model {
     pub entries: Vec<Entry>,
 }
 
+#[derive(Debug)]
 pub struct Entry {
     pub path: PathBuf,
     pub old: Oid,
@@ -16,11 +18,12 @@ pub struct Entry {
     pub hunks: Vec<Hunk>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Hunk {
     pub lines: Vec<Line>,
 }
 
+#[derive(Debug)]
 pub enum LineStatus {
     Add,
     Remove,
@@ -28,6 +31,7 @@ pub enum LineStatus {
     Binary,
 }
 
+#[derive(Debug)]
 pub struct Line {
     pub status: LineStatus,
     pub content: String,
@@ -58,7 +62,12 @@ impl<'a> TryFrom<Diff<'a>> for Model {
     type Error = eyre::Report;
 
     fn try_from(diff: Diff<'a>) -> std::prelude::v1::Result<Self, Self::Error> {
+        let mut name = Option::<PathBuf>::None;
+
         let mut hunk = Hunk::default();
+
+        let mut entries = vec![];
+        let mut hunks = vec![];
 
         diff.print(git2::DiffFormat::Patch, |delta, _hunk, line| {
             if let Ok(content) = std::str::from_utf8(line.content()) {
@@ -69,12 +78,26 @@ impl<'a> TryFrom<Diff<'a>> for Model {
                     git2::DiffLineType::Binary => hunk.add(LineStatus::Binary, content),
 
                     git2::DiffLineType::FileHeader => {
-                        dbg!(content);
-                        dbg!(delta.old_file().id());
-                        dbg!(delta.new_file().id());
-                    }
-                    git2::DiffLineType::HunkHeader => (),
+                        if let Some(name) = &name {
+                            if !hunk.is_empty() {
+                                hunks.push(std::mem::take(&mut hunk));
+                            }
 
+                            entries.push(Entry {
+                                hunks: std::mem::take(&mut hunks),
+                                path: name.clone(),
+                                old: delta.old_file().id(),
+                                new: delta.new_file().id(),
+                            });
+                        }
+
+                        name = delta.new_file().path().map(ToOwned::to_owned);
+                    }
+                    git2::DiffLineType::HunkHeader => {
+                        if !hunk.is_empty() {
+                            hunks.push(std::mem::take(&mut hunk));
+                        }
+                    }
                     git2::DiffLineType::ContextEOFNL
                     | git2::DiffLineType::AddEOFNL
                     | git2::DiffLineType::DeleteEOFNL => (),
@@ -85,7 +108,7 @@ impl<'a> TryFrom<Diff<'a>> for Model {
         })
         .context("failed to render diff")?;
 
-        Ok(Model { entries: vec![] })
+        Ok(Model { entries })
     }
 }
 
@@ -93,6 +116,10 @@ impl Hunk {
     fn add(&mut self, status: LineStatus, line: &str) {
         let content = line.to_string();
         self.lines.push(Line { status, content })
+    }
+
+    fn is_empty(&self) -> bool {
+        self.lines.is_empty()
     }
 }
 

@@ -17,6 +17,8 @@ use ratatui::{
 
 use action::Action;
 
+use crate::model::Model;
+
 mod action;
 
 #[derive(Debug, Clone)]
@@ -26,22 +28,17 @@ struct FileSection {
 }
 
 #[derive(Debug)]
-struct App {
-    lines: Vec<String>,
-    files: Vec<FileSection>,
+pub struct App<'a> {
+    model: &'a Model,
     selected_file: usize,
     scroll: u16,
     should_quit: bool,
 }
 
-impl App {
-    fn new(diff: String) -> Self {
-        let lines = diff.lines().map(ToOwned::to_owned).collect::<Vec<_>>();
-        let files = find_file_sections(&lines);
-
+impl<'a> App<'a> {
+    pub fn new(model: &'a Model) -> Self {
         Self {
-            lines,
-            files,
+            model,
             selected_file: 0,
             scroll: 0,
             should_quit: false,
@@ -49,7 +46,7 @@ impl App {
     }
 
     fn next_file(&mut self) {
-        if self.selected_file + 1 < self.files.len() {
+        if self.selected_file + 1 < self.model.entries.len() {
             self.selected_file += 1;
             self.jump_to_selected_file();
         }
@@ -73,20 +70,23 @@ impl App {
     }
 
     fn jump_to_selected_file(&mut self) {
-        if let Some(file) = self.files.get(self.selected_file) {
-            self.scroll = file.start_line.min(u16::MAX as usize) as u16;
-        }
+        todo!("reimplement")
+        // if let Some(file) = self.model.entries.get(self.selected_file) {
+        //     self.scroll = file.start_line.min(u16::MAX as usize) as u16;
+        // }
     }
 
     fn sync_selected_file_to_scroll(&mut self) {
-        let scroll = usize::from(self.scroll);
-        if let Some(index) = self
-            .files
-            .iter()
-            .rposition(|file| file.start_line <= scroll)
-        {
-            self.selected_file = index;
-        }
+        todo!("reimplement");
+        // let scroll = usize::from(self.scroll);
+        // if let Some(index) = self
+        //     .model
+        //     .entries
+        //     .iter()
+        //     .rposition(|file| file.start_line <= scroll)
+        // {
+        //     self.selected_file = index;
+        // }
     }
 
     fn apply(&mut self, action: Action) {
@@ -99,54 +99,55 @@ impl App {
                 self.selected_file = 0;
             }
             Action::JumpToBottom => {
-                self.scroll = self.lines.len().saturating_sub(1).min(u16::MAX as usize) as u16;
-                self.sync_selected_file_to_scroll();
+                todo!("reimplement");
+                // self.scroll = self.lines.len().saturating_sub(1).min(u16::MAX as usize) as u16;
+                // self.sync_selected_file_to_scroll();
             }
             Action::NextFile => self.next_file(),
             Action::PreviousFile => self.previous_file(),
         }
     }
-}
 
-pub fn run(diff: String) -> Result<()> {
-    enable_raw_mode().context("failed to enable raw terminal mode")?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen).context("failed to enter alternate screen")?;
+    pub fn run(&mut self) -> Result<()> {
+        enable_raw_mode().context("failed to enable raw terminal mode")?;
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen).context("failed to enter alternate screen")?;
 
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend).context("failed to initialize terminal")?;
-    let mut app = App::new(diff);
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = Terminal::new(backend).context("failed to initialize terminal")?;
 
-    let result = run_app(&mut terminal, &mut app);
+        let result = self.main_loop(&mut terminal);
 
-    disable_raw_mode().context("failed to disable raw terminal mode")?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)
-        .context("failed to leave alternate screen")?;
-    terminal.show_cursor().context("failed to show cursor")?;
+        disable_raw_mode().context("failed to disable raw terminal mode")?;
+        execute!(terminal.backend_mut(), LeaveAlternateScreen)
+            .context("failed to leave alternate screen")?;
+        terminal.show_cursor().context("failed to show cursor")?;
 
-    result
-}
-
-fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> Result<()> {
-    while !app.should_quit {
-        terminal.draw(|frame| render(frame, app))?;
-
-        if event::poll(Duration::from_millis(100)).context("failed to poll terminal events")? {
-            let Event::Key(key) = event::read().context("failed to read terminal event")? else {
-                continue;
-            };
-
-            if key.kind != KeyEventKind::Press {
-                continue;
-            }
-
-            if let Ok(action) = Action::try_from(key) {
-                app.apply(action);
-            }
-        }
+        result
     }
 
-    Ok(())
+    fn main_loop(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+        while !self.should_quit {
+            terminal.draw(|frame| render(frame, self))?;
+
+            if event::poll(Duration::from_millis(100)).context("failed to poll terminal events")? {
+                let Event::Key(key) = event::read().context("failed to read terminal event")?
+                else {
+                    continue;
+                };
+
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
+
+                if let Ok(action) = Action::try_from(key) {
+                    self.apply(action);
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
@@ -157,12 +158,13 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
         .split(area);
 
     let file_items = app
-        .files
+        .model
+        .entries
         .iter()
-        .map(|file| ListItem::new(file.name.clone()))
+        .map(|file| ListItem::new(file.path.display().to_string()))
         .collect::<Vec<_>>();
     let mut list_state = ListState::default();
-    if !app.files.is_empty() {
+    if !app.model.entries.is_empty() {
         list_state.select(Some(app.selected_file));
     }
 
@@ -172,12 +174,12 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
         .highlight_symbol("› ");
     frame.render_stateful_widget(files, chunks[0], &mut list_state);
 
-    let title = if app.lines.is_empty() {
+    let title = if app.model.entries.is_empty() {
         "Diff - no changes"
     } else {
         "Diff - q quit · j/k scroll · n/p files · g/G top/bottom"
     };
-    let diff = Paragraph::new(styled_diff_lines(&app.lines))
+    let diff = Paragraph::new(styled_diff_lines(&[]))
         .block(Block::default().title(title).borders(Borders::ALL))
         .scroll((app.scroll, 0));
     frame.render_widget(diff, chunks[1]);
