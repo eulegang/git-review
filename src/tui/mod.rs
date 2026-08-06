@@ -152,7 +152,12 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
     frame.render_stateful_widget(files, chunks[0], &mut list_state);
 
     let diff = Diff {
-        hunks: &app.model.entries[app.selected_file].hunks,
+        hunks: app
+            .model
+            .entries
+            .get(app.selected_file)
+            .map(|e| e.hunks.as_slice())
+            .unwrap_or_default(),
     };
 
     frame.render_stateful_widget(diff, chunks[1], &mut app.line);
