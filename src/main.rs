@@ -10,9 +10,6 @@ use crate::{model::Model, tui::App};
 fn main() -> Result<()> {
     let mode = Cli::parse_args().diff_mode()?;
     let model = Model::load(&mode)?;
-
-    dbg!(&model);
-
     let mut app = App::new(&model);
 
     app.run()
