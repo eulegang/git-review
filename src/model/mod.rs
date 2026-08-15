@@ -39,6 +39,15 @@ pub struct Line {
     pub content: String,
 }
 
+impl From<(LineStatus, &str)> for Line {
+    fn from((status, content): (LineStatus, &str)) -> Self {
+        Self {
+            status,
+            content: content.to_string(),
+        }
+    }
+}
+
 impl Model {
     pub fn load(mode: &DiffMode) -> Result<Self> {
         let repo = Repository::discover(".").context("not inside a Git repository")?;

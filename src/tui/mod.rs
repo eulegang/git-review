@@ -139,3 +139,16 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
 
     frame.render_stateful_widget(diff, area, &mut app.line);
 }
+
+#[cfg(test)]
+pub(crate) fn render_stateful<W, S>(widget: W, mut state: S) -> ratatui::buffer::Buffer
+where
+    W: ratatui::widgets::StatefulWidget<State = S>,
+{
+    let area = ratatui::layout::Rect::new(0, 0, 167, 38);
+    let mut buf = ratatui::buffer::Buffer::empty(area);
+
+    ratatui::widgets::StatefulWidget::render(widget, area, &mut buf, &mut state);
+
+    buf
+}
