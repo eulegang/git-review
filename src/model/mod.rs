@@ -134,13 +134,20 @@ impl<'a> TryFrom<Diff<'a>> for Model {
 }
 
 impl Hunk {
-    fn add(&mut self, status: LineStatus, line: &str) {
+    pub fn add(&mut self, status: LineStatus, line: &str) {
         let content = line.to_string();
         self.lines.push(Line { status, content })
     }
 
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.lines.is_empty()
+    }
+
+    pub fn critical(&self) -> usize {
+        self.lines
+            .iter()
+            .filter(|line| matches!(line.status, LineStatus::Add | LineStatus::Remove))
+            .count()
     }
 }
 

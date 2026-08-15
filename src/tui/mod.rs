@@ -7,13 +7,7 @@ use crossterm::{
 };
 use diff::Diff;
 use eyre::{Context, Result};
-use ratatui::{
-    Terminal,
-    backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout},
-    style::{Color, Style},
-    widgets::{Block, Borders, List, ListItem, ListState},
-};
+use ratatui::{Terminal, backend::CrosstermBackend};
 
 use action::Action;
 
@@ -57,18 +51,22 @@ impl<'a> App<'a> {
     }
 
     fn scroll_down(&mut self, amount: u16) {
-        self.scroll = self.scroll.saturating_add(amount);
-        self.sync_selected_file_to_scroll();
+        self.line += amount as usize;
+        self.line = self.line.min(
+            self.model
+                .entries
+                .get(self.selected_file)
+                .map(|e| e.hunks.iter().map(|h| h.critical()).sum::<usize>())
+                .unwrap_or_default()
+                .saturating_sub(1),
+        )
     }
 
     fn scroll_up(&mut self, amount: u16) {
-        self.scroll = self.scroll.saturating_sub(amount);
-        self.sync_selected_file_to_scroll();
+        self.line = self.line.saturating_sub(amount as usize);
     }
 
     fn jump_to_selected_file(&mut self) {}
-
-    fn sync_selected_file_to_scroll(&mut self) {}
 
     fn apply(&mut self, action: Action) {
         match action {
@@ -129,27 +127,6 @@ impl<'a> App<'a> {
 
 fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
     let area = frame.area();
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(32), Constraint::Min(20)])
-        .split(area);
-
-    let file_items = app
-        .model
-        .entries
-        .iter()
-        .map(|file| ListItem::new(file.path.display().to_string()))
-        .collect::<Vec<_>>();
-    let mut list_state = ListState::default();
-    if !app.model.entries.is_empty() {
-        list_state.select(Some(app.selected_file));
-    }
-
-    let files = List::new(file_items)
-        .block(Block::default().title("Files").borders(Borders::ALL))
-        .highlight_style(Style::default().fg(Color::Black).bg(Color::Cyan))
-        .highlight_symbol("› ");
-    frame.render_stateful_widget(files, chunks[0], &mut list_state);
 
     let diff = Diff {
         hunks: app
@@ -160,5 +137,5 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
             .unwrap_or_default(),
     };
 
-    frame.render_stateful_widget(diff, chunks[1], &mut app.line);
+    frame.render_stateful_widget(diff, area, &mut app.line);
 }

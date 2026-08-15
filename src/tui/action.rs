@@ -2,6 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 
 const PAGE_SCROLL_LINES: u16 = 20;
 
+/// an action to be taken
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
     Quit,
