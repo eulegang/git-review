@@ -9,6 +9,7 @@ fn centered_x(widest_line: &str) -> u16 {
 
 #[test]
 fn continues_rendering_across_hunks() {
+    let theme = Theme::default();
     let widget = Diff {
         hunks: &[
             Hunk {
@@ -18,6 +19,7 @@ fn continues_rendering_across_hunks() {
                 lines: vec![(LineStatus::Remove, "-second").into()],
             },
         ],
+        theme: &theme,
     };
 
     let buf = render_stateful(widget, DiffState { line: 0, scroll: 0 });
@@ -34,6 +36,7 @@ fn continues_rendering_across_hunks() {
 
 #[test]
 fn renders_line_content_and_status_backgrounds() {
+    let theme = Theme::default();
     let widget = Diff {
         hunks: &[Hunk {
             lines: vec![
@@ -43,6 +46,7 @@ fn renders_line_content_and_status_backgrounds() {
                 (LineStatus::Binary, "binary").into(),
             ],
         }],
+        theme: &theme,
     };
 
     let buf = render_stateful(
@@ -74,6 +78,7 @@ fn renders_line_content_and_status_backgrounds() {
 
 #[test]
 fn highlights_selected_added_or_removed_line_only() {
+    let theme = Theme::default();
     let widget = Diff {
         hunks: &[Hunk {
             lines: vec![
@@ -83,6 +88,7 @@ fn highlights_selected_added_or_removed_line_only() {
                 (LineStatus::Remove, "-removed").into(),
             ],
         }],
+        theme: &theme,
     };
 
     let buf = render_stateful(widget, DiffState { line: 1, scroll: 0 });
@@ -104,6 +110,7 @@ fn highlights_selected_added_or_removed_line_only() {
 
 #[test]
 fn scrolls_to_keep_selected_line_visible() {
+    let theme = Theme::default();
     let lines = (0..50)
         .map(|i| crate::model::Line {
             status: LineStatus::Add,
@@ -112,6 +119,7 @@ fn scrolls_to_keep_selected_line_visible() {
         .collect();
     let widget = Diff {
         hunks: &[Hunk { lines }],
+        theme: &theme,
     };
 
     let state = DiffState {

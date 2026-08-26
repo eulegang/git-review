@@ -49,8 +49,7 @@ impl From<(LineStatus, &str)> for Line {
 }
 
 impl Model {
-    pub fn load(mode: &DiffMode) -> Result<Self> {
-        let repo = Repository::discover(".").context("not inside a Git repository")?;
+    pub fn load(repo: &Repository, mode: &DiffMode) -> Result<Self> {
         let mut options = DiffOptions::new();
         options
             .show_untracked_content(true)

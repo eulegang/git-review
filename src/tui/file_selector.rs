@@ -1,13 +1,13 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
-use crate::model::Entry;
+use crate::{model::Entry, tui::Theme};
 
 pub struct FileSelector<'a> {
     pub entries: &'a [Entry],
+    pub theme: &'a Theme,
 }
 
 impl StatefulWidget for FileSelector<'_> {
@@ -28,11 +28,7 @@ impl StatefulWidget for FileSelector<'_> {
                     .title("Files — Enter select, Esc close")
                     .borders(Borders::ALL),
             )
-            .highlight_style(
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            )
+            .highlight_style(self.theme.selector_highlight)
             .highlight_symbol("› ");
         let mut selector_state = ListState::default().with_selected(Some(*state));
 

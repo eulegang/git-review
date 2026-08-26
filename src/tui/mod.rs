@@ -8,13 +8,7 @@ use crossterm::{
 use diff::{Diff, DiffState};
 use eyre::{Context, Result};
 use file_selector::FileSelector;
-use ratatui::{
-    Terminal,
-    backend::CrosstermBackend,
-    layout::Alignment,
-    style::{Color, Style},
-    widgets::Paragraph,
-};
+use ratatui::{Terminal, backend::CrosstermBackend, layout::Alignment, widgets::Paragraph};
 
 use action::Action;
 
@@ -23,6 +17,9 @@ use crate::model::Model;
 mod action;
 mod diff;
 mod file_selector;
+mod theme;
+
+pub use theme::Theme;
 
 #[derive(Debug)]
 pub struct App<'a> {
@@ -33,10 +30,11 @@ pub struct App<'a> {
     line: usize,
     scroll: usize,
     should_quit: bool,
+    theme: Theme,
 }
 
 impl<'a> App<'a> {
-    pub fn new(model: &'a Model) -> Self {
+    pub fn new(model: &'a Model, theme: Theme) -> Self {
         Self {
             model,
             selected_file: 0,
@@ -45,6 +43,7 @@ impl<'a> App<'a> {
             line: 0,
             scroll: 0,
             should_quit: false,
+            theme,
         }
     }
 
@@ -191,7 +190,7 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
     if app.model.entries.is_empty() {
         let warning = Paragraph::new("No changes to review")
             .alignment(Alignment::Center)
-            .style(Style::default().fg(Color::Yellow));
+            .style(app.theme.warning);
         frame.render_widget(warning, area);
         return;
     }
@@ -203,6 +202,7 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
             .get(app.selected_file)
             .map(|e| e.hunks.as_slice())
             .unwrap_or_default(),
+        theme: &app.theme,
     };
 
     let mut state = DiffState {
@@ -216,6 +216,7 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
     if app.file_selector_open {
         let selector = FileSelector {
             entries: &app.model.entries,
+            theme: &app.theme,
         };
         frame.render_stateful_widget(selector, area, &mut app.selector_file);
     }

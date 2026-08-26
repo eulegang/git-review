@@ -3,20 +3,27 @@ mod model;
 mod tui;
 
 use cli::Cli;
-use eyre::Result;
+use eyre::{Context, Result};
+use git2::Repository;
 
-use crate::{model::Model, tui::App};
+use crate::{
+    model::Model,
+    tui::{App, Theme},
+};
 
 fn main() -> Result<()> {
-    let mode = Cli::parse_args().diff_mode()?;
-    let model = Model::load(&mode)?;
+    let cli = Cli::parse_args();
+    let repo = Repository::discover(".").context("not inside a Git repository")?;
+    let theme = Theme::load(&repo)?;
+    let mode = cli.diff_mode()?;
+    let model = Model::load(&repo, &mode)?;
 
     if option_env!("DEBUG_MODEL") != None {
         dbg!(&model);
 
         Ok(())
     } else {
-        let mut app = App::new(&model);
+        let mut app = App::new(&model, theme);
 
         app.run()
     }

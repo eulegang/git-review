@@ -1,16 +1,20 @@
 use ratatui::{
-    style::{Color, Modifier, Style},
+    style::Style,
     text::{Span, Text},
     widgets::{StatefulWidget, Widget},
 };
 
-use crate::model::{Hunk, LineStatus};
+use crate::{
+    model::{Hunk, LineStatus},
+    tui::Theme,
+};
 
 #[cfg(test)]
 mod unit;
 
 pub struct Diff<'a> {
     pub hunks: &'a [Hunk],
+    pub theme: &'a Theme,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -75,17 +79,15 @@ impl<'a> StatefulWidget for Diff<'a> {
             .enumerate()
         {
             let mut style = match line.status {
-                LineStatus::Add => Style::default().bg(Color::Green),
-                LineStatus::Remove => Style::default().bg(Color::Red),
+                LineStatus::Add => Style::default().bg(self.theme.added_bg),
+                LineStatus::Remove => Style::default().bg(self.theme.removed_bg),
                 LineStatus::Context => Style::default(),
-                LineStatus::Binary => Style::default().bg(Color::Gray),
+                LineStatus::Binary => Style::default().bg(self.theme.binary_bg),
             };
 
             if line.status == LineStatus::Add || line.status == LineStatus::Remove {
                 if critical_line == state.line {
-                    style = style
-                        .add_modifier(Modifier::BOLD)
-                        .add_modifier(Modifier::REVERSED);
+                    style = style.add_modifier(self.theme.selected_modifier);
                 }
 
                 critical_line += 1;
