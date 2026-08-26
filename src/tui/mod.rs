@@ -7,7 +7,13 @@ use crossterm::{
 };
 use diff::Diff;
 use eyre::{Context, Result};
-use ratatui::{Terminal, backend::CrosstermBackend};
+use ratatui::{
+    Terminal,
+    backend::CrosstermBackend,
+    layout::Alignment,
+    style::{Color, Style},
+    widgets::Paragraph,
+};
 
 use action::Action;
 
@@ -127,6 +133,14 @@ impl<'a> App<'a> {
 
 fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
     let area = frame.area();
+
+    if app.model.entries.is_empty() {
+        let warning = Paragraph::new("No changes to review")
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(Color::Yellow));
+        frame.render_widget(warning, area);
+        return;
+    }
 
     let diff = Diff {
         hunks: app
