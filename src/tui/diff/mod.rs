@@ -22,13 +22,27 @@ impl<'a> StatefulWidget for Diff<'a> {
         buf: &mut ratatui::prelude::Buffer,
         state: &mut Self::State,
     ) {
+        let widest_line = self
+            .hunks
+            .iter()
+            .flat_map(|hunk| &hunk.lines)
+            .map(|line| line.content.chars().count().min(area.width as usize) as u16)
+            .max()
+            .unwrap_or_default();
+        let left_padding = area.width.saturating_sub(widest_line) / 2;
+        let render_area = ratatui::prelude::Rect {
+            x: area.x + left_padding,
+            width: area.width - left_padding,
+            ..area
+        };
+
         let mut text: Text = Text::default();
 
         let mut hunk_id = 0;
         let mut line_id = 0;
         let mut critical_line = 0;
         'base: for i in 0.. {
-            if i > area.height {
+            if i >= render_area.height {
                 break;
             }
 
@@ -64,11 +78,19 @@ impl<'a> StatefulWidget for Diff<'a> {
                 critical_line += 1;
             }
 
+            buf.set_style(
+                ratatui::prelude::Rect {
+                    y: area.y + i,
+                    height: 1,
+                    ..area
+                },
+                style,
+            );
             text.push_line(Span::styled(&line.content, style));
 
             line_id += 1;
         }
 
-        text.render(area, buf);
+        text.render(render_area, buf);
     }
 }

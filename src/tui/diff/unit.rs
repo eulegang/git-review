@@ -3,6 +3,10 @@ use ratatui::style::{Color, Modifier};
 use super::*;
 use crate::tui::render_stateful;
 
+fn centered_x(widest_line: &str) -> u16 {
+    ((167 - widest_line.chars().count()) / 2) as u16
+}
+
 #[test]
 fn continues_rendering_across_hunks() {
     let widget = Diff {
@@ -18,10 +22,14 @@ fn continues_rendering_across_hunks() {
 
     let buf = render_stateful(widget, 0);
 
-    assert_eq!(buf[(0, 0)].symbol(), "+");
+    let x = centered_x("-second");
+
+    assert_eq!(buf[(x, 0)].symbol(), "+");
     assert_eq!(buf[(0, 0)].bg, Color::Green);
-    assert_eq!(buf[(0, 1)].symbol(), "-");
+    assert_eq!(buf[(166, 0)].bg, Color::Green);
+    assert_eq!(buf[(x, 1)].symbol(), "-");
     assert_eq!(buf[(0, 1)].bg, Color::Red);
+    assert_eq!(buf[(166, 1)].bg, Color::Red);
 }
 
 #[test]
@@ -39,18 +47,23 @@ fn renders_line_content_and_status_backgrounds() {
 
     let buf = render_stateful(widget, 99);
 
-    assert_eq!(buf[(0, 0)].symbol(), " ");
-    assert_eq!(buf[(1, 0)].symbol(), "c");
-    assert_eq!(buf[(0, 0)].bg, Color::Reset);
+    let x = centered_x("-removed");
 
-    assert_eq!(buf[(0, 1)].symbol(), "+");
+    assert_eq!(buf[(x, 0)].symbol(), " ");
+    assert_eq!(buf[(x + 1, 0)].symbol(), "c");
+    assert_eq!(buf[(x, 0)].bg, Color::Reset);
+
+    assert_eq!(buf[(x, 1)].symbol(), "+");
     assert_eq!(buf[(0, 1)].bg, Color::Green);
+    assert_eq!(buf[(166, 1)].bg, Color::Green);
 
-    assert_eq!(buf[(0, 2)].symbol(), "-");
+    assert_eq!(buf[(x, 2)].symbol(), "-");
     assert_eq!(buf[(0, 2)].bg, Color::Red);
+    assert_eq!(buf[(166, 2)].bg, Color::Red);
 
-    assert_eq!(buf[(0, 3)].symbol(), "b");
+    assert_eq!(buf[(x, 3)].symbol(), "b");
     assert_eq!(buf[(0, 3)].bg, Color::Gray);
+    assert_eq!(buf[(166, 3)].bg, Color::Gray);
 }
 
 #[test]
@@ -68,15 +81,17 @@ fn highlights_selected_added_or_removed_line_only() {
 
     let buf = render_stateful(widget, 1);
 
-    assert_eq!(buf[(0, 1)].bg, Color::Green);
-    assert!(!buf[(0, 1)].modifier.contains(Modifier::BOLD));
-    assert!(!buf[(0, 1)].modifier.contains(Modifier::REVERSED));
+    let x = centered_x("-removed");
 
-    assert_eq!(buf[(0, 2)].bg, Color::Gray);
-    assert!(!buf[(0, 2)].modifier.contains(Modifier::BOLD));
-    assert!(!buf[(0, 2)].modifier.contains(Modifier::REVERSED));
+    assert_eq!(buf[(x, 1)].bg, Color::Green);
+    assert!(!buf[(x, 1)].modifier.contains(Modifier::BOLD));
+    assert!(!buf[(x, 1)].modifier.contains(Modifier::REVERSED));
 
-    assert_eq!(buf[(0, 3)].bg, Color::Red);
-    assert!(buf[(0, 3)].modifier.contains(Modifier::BOLD));
-    assert!(buf[(0, 3)].modifier.contains(Modifier::REVERSED));
+    assert_eq!(buf[(x, 2)].bg, Color::Gray);
+    assert!(!buf[(x, 2)].modifier.contains(Modifier::BOLD));
+    assert!(!buf[(x, 2)].modifier.contains(Modifier::REVERSED));
+
+    assert_eq!(buf[(x, 3)].bg, Color::Red);
+    assert!(buf[(x, 3)].modifier.contains(Modifier::BOLD));
+    assert!(buf[(x, 3)].modifier.contains(Modifier::REVERSED));
 }
