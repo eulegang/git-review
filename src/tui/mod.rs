@@ -87,6 +87,51 @@ impl<'a> App<'a> {
         self.line = self.line.saturating_sub(amount as usize);
     }
 
+    fn jump_to_next_hunk(&mut self) {
+        if let Some(entry) = self.model.entries.get(self.selected_file) {
+            let mut first_line = 0;
+
+            for hunk in &entry.hunks {
+                let line_count = hunk.critical();
+                if line_count == 0 {
+                    continue;
+                }
+
+                if first_line > self.line {
+                    self.line = first_line;
+                    return;
+                }
+
+                first_line += line_count;
+            }
+        }
+    }
+
+    fn jump_to_previous_hunk(&mut self) {
+        if let Some(entry) = self.model.entries.get(self.selected_file) {
+            let mut first_line = 0;
+            let mut previous_hunk = None;
+
+            for hunk in &entry.hunks {
+                let line_count = hunk.critical();
+                if line_count == 0 {
+                    continue;
+                }
+
+                if self.line <= first_line || self.line < first_line + line_count {
+                    break;
+                }
+
+                previous_hunk = Some(first_line);
+                first_line += line_count;
+            }
+
+            if let Some(line) = previous_hunk {
+                self.line = line;
+            }
+        }
+    }
+
     fn jump_to_selected_file(&mut self) {
         self.line = 0;
         self.scroll = 0;
@@ -109,8 +154,12 @@ impl<'a> App<'a> {
                     self.file_selector_open = false;
                     self.jump_to_selected_file();
                 }
-                Action::ScrollDown(_) | Action::NextFile => self.next_selector_file(),
-                Action::ScrollUp(_) | Action::PreviousFile => self.previous_selector_file(),
+                Action::ScrollDown(_) | Action::JumpToNextHunk | Action::NextFile => {
+                    self.next_selector_file()
+                }
+                Action::ScrollUp(_) | Action::JumpToPreviousHunk | Action::PreviousFile => {
+                    self.previous_selector_file()
+                }
                 Action::JumpToTop => self.selector_file = 0,
                 Action::JumpToBottom => {
                     if !self.model.entries.is_empty() {
@@ -125,6 +174,8 @@ impl<'a> App<'a> {
             Action::Quit => self.should_quit = true,
             Action::ScrollDown(amount) => self.scroll_down(amount),
             Action::ScrollUp(amount) => self.scroll_up(amount),
+            Action::JumpToNextHunk => self.jump_to_next_hunk(),
+            Action::JumpToPreviousHunk => self.jump_to_previous_hunk(),
             Action::JumpToTop => {
                 self.line = 0;
                 self.scroll = 0;
