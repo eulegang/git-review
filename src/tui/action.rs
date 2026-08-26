@@ -12,6 +12,8 @@ pub enum Action {
     JumpToBottom,
     NextFile,
     PreviousFile,
+    ToggleFileSelector,
+    ConfirmFileSelection,
 }
 
 impl TryFrom<KeyEvent> for Action {
@@ -28,6 +30,8 @@ impl TryFrom<KeyEvent> for Action {
             KeyCode::Char('G') | KeyCode::End => Ok(Action::JumpToBottom),
             KeyCode::Char('n') | KeyCode::Tab => Ok(Action::NextFile),
             KeyCode::Char('p') | KeyCode::BackTab => Ok(Action::PreviousFile),
+            KeyCode::Char('f') => Ok(Action::ToggleFileSelector),
+            KeyCode::Enter => Ok(Action::ConfirmFileSelection),
             _ => Err(eyre::eyre!("invalid keycode")),
         }
     }

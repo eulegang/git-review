@@ -7,6 +7,7 @@ use crossterm::{
 };
 use diff::Diff;
 use eyre::{Context, Result};
+use file_selector::FileSelector;
 use ratatui::{
     Terminal,
     backend::CrosstermBackend,
@@ -21,11 +22,14 @@ use crate::model::Model;
 
 mod action;
 mod diff;
+mod file_selector;
 
 #[derive(Debug)]
 pub struct App<'a> {
     model: &'a Model,
     selected_file: usize,
+    selector_file: usize,
+    file_selector_open: bool,
     line: usize,
     scroll: u16,
     should_quit: bool,
@@ -36,6 +40,8 @@ impl<'a> App<'a> {
         Self {
             model,
             selected_file: 0,
+            selector_file: 0,
+            file_selector_open: false,
             line: 0,
             scroll: 0,
             should_quit: false,
@@ -56,6 +62,16 @@ impl<'a> App<'a> {
         }
     }
 
+    fn next_selector_file(&mut self) {
+        if self.selector_file + 1 < self.model.entries.len() {
+            self.selector_file += 1;
+        }
+    }
+
+    fn previous_selector_file(&mut self) {
+        self.selector_file = self.selector_file.saturating_sub(1);
+    }
+
     fn scroll_down(&mut self, amount: u16) {
         self.line += amount as usize;
         self.line = self.line.min(
@@ -72,9 +88,40 @@ impl<'a> App<'a> {
         self.line = self.line.saturating_sub(amount as usize);
     }
 
-    fn jump_to_selected_file(&mut self) {}
+    fn jump_to_selected_file(&mut self) {
+        self.line = 0;
+        self.scroll = 0;
+    }
+
+    fn current_file_line_count(&self) -> usize {
+        self.model
+            .entries
+            .get(self.selected_file)
+            .map(|e| e.hunks.iter().map(|h| h.critical()).sum::<usize>())
+            .unwrap_or_default()
+    }
 
     fn apply(&mut self, action: Action) {
+        if self.file_selector_open {
+            match action {
+                Action::Quit | Action::ToggleFileSelector => self.file_selector_open = false,
+                Action::ConfirmFileSelection => {
+                    self.selected_file = self.selector_file;
+                    self.file_selector_open = false;
+                    self.jump_to_selected_file();
+                }
+                Action::ScrollDown(_) | Action::NextFile => self.next_selector_file(),
+                Action::ScrollUp(_) | Action::PreviousFile => self.previous_selector_file(),
+                Action::JumpToTop => self.selector_file = 0,
+                Action::JumpToBottom => {
+                    if !self.model.entries.is_empty() {
+                        self.selector_file = self.model.entries.len() - 1;
+                    }
+                }
+            }
+            return;
+        }
+
         match action {
             Action::Quit => self.should_quit = true,
             Action::ScrollDown(amount) => self.scroll_down(amount),
@@ -83,9 +130,20 @@ impl<'a> App<'a> {
                 self.scroll = 0;
                 self.selected_file = 0;
             }
-            Action::JumpToBottom => {}
+            Action::JumpToBottom => {
+                if !self.model.entries.is_empty() {
+                    self.selected_file = self.model.entries.len() - 1;
+                    self.line = self.current_file_line_count().saturating_sub(1);
+                    self.scroll = 0;
+                }
+            }
             Action::NextFile => self.next_file(),
             Action::PreviousFile => self.previous_file(),
+            Action::ToggleFileSelector => {
+                self.selector_file = self.selected_file;
+                self.file_selector_open = true;
+            }
+            Action::ConfirmFileSelection => {}
         }
     }
 
@@ -152,6 +210,13 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
     };
 
     frame.render_stateful_widget(diff, area, &mut app.line);
+
+    if app.file_selector_open {
+        let selector = FileSelector {
+            entries: &app.model.entries,
+        };
+        frame.render_stateful_widget(selector, area, &mut app.selector_file);
+    }
 }
 
 #[cfg(test)]
