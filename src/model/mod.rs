@@ -52,6 +52,9 @@ impl Model {
     pub fn load(mode: &DiffMode) -> Result<Self> {
         let repo = Repository::discover(".").context("not inside a Git repository")?;
         let mut options = DiffOptions::new();
+        options
+            .show_untracked_content(true)
+            .recurse_untracked_dirs(true);
 
         let diff = match mode {
             DiffMode::WorkingTree => repo
