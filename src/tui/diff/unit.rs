@@ -22,7 +22,14 @@ fn continues_rendering_across_hunks() {
         theme: &theme,
     };
 
-    let buf = render_stateful(widget, DiffState { line: 0, scroll: 0 });
+    let buf = render_stateful(
+        widget,
+        DiffState {
+            line: 0,
+            scroll: 0,
+            center_line: false,
+        },
+    );
 
     let x = centered_x("-second");
 
@@ -54,6 +61,7 @@ fn renders_line_content_and_status_backgrounds() {
         DiffState {
             line: 99,
             scroll: 0,
+            center_line: false,
         },
     );
 
@@ -91,7 +99,14 @@ fn highlights_selected_added_or_removed_line_only() {
         theme: &theme,
     };
 
-    let buf = render_stateful(widget, DiffState { line: 1, scroll: 0 });
+    let buf = render_stateful(
+        widget,
+        DiffState {
+            line: 1,
+            scroll: 0,
+            center_line: false,
+        },
+    );
 
     let x = centered_x("-removed");
 
@@ -125,6 +140,7 @@ fn scrolls_to_keep_selected_line_visible() {
     let state = DiffState {
         line: 49,
         scroll: 0,
+        center_line: false,
     };
     let buf = render_stateful(widget, state);
 
@@ -134,4 +150,33 @@ fn scrolls_to_keep_selected_line_visible() {
     assert_eq!(buf[(x + 6, 0)].symbol(), "1");
     assert_eq!(buf[(x + 7, 0)].symbol(), "2");
     assert!(buf[(x, 37)].modifier.contains(Modifier::BOLD));
+}
+
+#[test]
+fn centers_selected_line_even_at_file_end() {
+    let theme = Theme::default();
+    let lines = (0..50)
+        .map(|i| crate::model::Line {
+            status: LineStatus::Add,
+            content: format!("+line {i}"),
+        })
+        .collect();
+    let widget = Diff {
+        hunks: &[Hunk { lines }],
+        theme: &theme,
+    };
+
+    let state = DiffState {
+        line: 49,
+        scroll: 0,
+        center_line: true,
+    };
+    let buf = render_stateful(widget, state);
+
+    let x = centered_x("+line 10");
+
+    assert_eq!(buf[(x, 19)].symbol(), "+");
+    assert_eq!(buf[(x + 6, 19)].symbol(), "4");
+    assert_eq!(buf[(x + 7, 19)].symbol(), "9");
+    assert!(buf[(x, 19)].modifier.contains(Modifier::BOLD));
 }

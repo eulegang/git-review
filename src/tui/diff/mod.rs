@@ -21,6 +21,7 @@ pub struct Diff<'a> {
 pub struct DiffState {
     pub line: usize,
     pub scroll: usize,
+    pub center_line: bool,
 }
 
 impl<'a> StatefulWidget for Diff<'a> {
@@ -54,7 +55,9 @@ impl<'a> StatefulWidget for Diff<'a> {
 
         if let Some(selected_visual_line) = selected_visual_line(&lines, state.line) {
             let visible_height = area.height as usize;
-            if selected_visual_line < state.scroll {
+            if state.center_line {
+                state.scroll = selected_visual_line.saturating_sub(visible_height / 2);
+            } else if selected_visual_line < state.scroll {
                 state.scroll = selected_visual_line;
             } else if selected_visual_line >= state.scroll.saturating_add(visible_height) {
                 state.scroll =
@@ -62,8 +65,7 @@ impl<'a> StatefulWidget for Diff<'a> {
             }
         }
 
-        let max_scroll = lines.len().saturating_sub(area.height as usize);
-        state.scroll = state.scroll.min(max_scroll);
+        state.center_line = false;
 
         let mut text: Text = Text::default();
         let mut critical_line = lines

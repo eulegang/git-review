@@ -29,6 +29,7 @@ pub struct App<'a> {
     file_selector_open: bool,
     line: usize,
     scroll: usize,
+    center_line: bool,
     should_quit: bool,
     theme: Theme,
 }
@@ -42,6 +43,7 @@ impl<'a> App<'a> {
             file_selector_open: false,
             line: 0,
             scroll: 0,
+            center_line: false,
             should_quit: false,
             theme,
         }
@@ -166,6 +168,7 @@ impl<'a> App<'a> {
                         self.selector_file = self.model.entries.len() - 1;
                     }
                 }
+                Action::CenterSelectedLine => {}
             }
             return;
         }
@@ -176,6 +179,7 @@ impl<'a> App<'a> {
             Action::ScrollUp(amount) => self.scroll_up(amount),
             Action::JumpToNextHunk => self.jump_to_next_hunk(),
             Action::JumpToPreviousHunk => self.jump_to_previous_hunk(),
+            Action::CenterSelectedLine => self.center_line = true,
             Action::JumpToTop => {
                 self.line = 0;
                 self.scroll = 0;
@@ -259,10 +263,12 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
     let mut state = DiffState {
         line: app.line,
         scroll: app.scroll,
+        center_line: app.center_line,
     };
     frame.render_stateful_widget(diff, area, &mut state);
     app.line = state.line;
     app.scroll = state.scroll;
+    app.center_line = state.center_line;
 
     if app.file_selector_open {
         let selector = FileSelector {
