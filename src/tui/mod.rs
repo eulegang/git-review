@@ -5,7 +5,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use diff::Diff;
+use diff::{Diff, DiffState};
 use eyre::{Context, Result};
 use file_selector::FileSelector;
 use ratatui::{
@@ -31,7 +31,7 @@ pub struct App<'a> {
     selector_file: usize,
     file_selector_open: bool,
     line: usize,
-    scroll: u16,
+    scroll: usize,
     should_quit: bool,
 }
 
@@ -127,15 +127,11 @@ impl<'a> App<'a> {
             Action::ScrollDown(amount) => self.scroll_down(amount),
             Action::ScrollUp(amount) => self.scroll_up(amount),
             Action::JumpToTop => {
+                self.line = 0;
                 self.scroll = 0;
-                self.selected_file = 0;
             }
             Action::JumpToBottom => {
-                if !self.model.entries.is_empty() {
-                    self.selected_file = self.model.entries.len() - 1;
-                    self.line = self.current_file_line_count().saturating_sub(1);
-                    self.scroll = 0;
-                }
+                self.line = self.current_file_line_count().saturating_sub(1);
             }
             Action::NextFile => self.next_file(),
             Action::PreviousFile => self.previous_file(),
@@ -209,7 +205,13 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
             .unwrap_or_default(),
     };
 
-    frame.render_stateful_widget(diff, area, &mut app.line);
+    let mut state = DiffState {
+        line: app.line,
+        scroll: app.scroll,
+    };
+    frame.render_stateful_widget(diff, area, &mut state);
+    app.line = state.line;
+    app.scroll = state.scroll;
 
     if app.file_selector_open {
         let selector = FileSelector {

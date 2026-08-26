@@ -20,7 +20,7 @@ fn continues_rendering_across_hunks() {
         ],
     };
 
-    let buf = render_stateful(widget, 0);
+    let buf = render_stateful(widget, DiffState { line: 0, scroll: 0 });
 
     let x = centered_x("-second");
 
@@ -45,7 +45,13 @@ fn renders_line_content_and_status_backgrounds() {
         }],
     };
 
-    let buf = render_stateful(widget, 99);
+    let buf = render_stateful(
+        widget,
+        DiffState {
+            line: 99,
+            scroll: 0,
+        },
+    );
 
     let x = centered_x("-removed");
 
@@ -79,7 +85,7 @@ fn highlights_selected_added_or_removed_line_only() {
         }],
     };
 
-    let buf = render_stateful(widget, 1);
+    let buf = render_stateful(widget, DiffState { line: 1, scroll: 0 });
 
     let x = centered_x("-removed");
 
@@ -94,4 +100,30 @@ fn highlights_selected_added_or_removed_line_only() {
     assert_eq!(buf[(x, 3)].bg, Color::Red);
     assert!(buf[(x, 3)].modifier.contains(Modifier::BOLD));
     assert!(buf[(x, 3)].modifier.contains(Modifier::REVERSED));
+}
+
+#[test]
+fn scrolls_to_keep_selected_line_visible() {
+    let lines = (0..50)
+        .map(|i| crate::model::Line {
+            status: LineStatus::Add,
+            content: format!("+line {i}"),
+        })
+        .collect();
+    let widget = Diff {
+        hunks: &[Hunk { lines }],
+    };
+
+    let state = DiffState {
+        line: 49,
+        scroll: 0,
+    };
+    let buf = render_stateful(widget, state);
+
+    let x = centered_x("+line 10");
+
+    assert_eq!(buf[(x, 0)].symbol(), "+");
+    assert_eq!(buf[(x + 6, 0)].symbol(), "1");
+    assert_eq!(buf[(x + 7, 0)].symbol(), "2");
+    assert!(buf[(x, 37)].modifier.contains(Modifier::BOLD));
 }
