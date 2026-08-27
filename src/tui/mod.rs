@@ -10,7 +10,7 @@ use eyre::{Context, Result};
 use file_selector::FileSelector;
 use ratatui::{Terminal, backend::CrosstermBackend, layout::Alignment, widgets::Paragraph};
 
-use action::Action;
+use action::{Action, Mode};
 
 use crate::model::Model;
 
@@ -26,7 +26,7 @@ pub struct App<'a> {
     model: &'a Model,
     selected_file: usize,
     selector_file: usize,
-    file_selector_open: bool,
+    mode: Mode,
     line: usize,
     scroll: usize,
     hidden_hunks: Vec<BTreeSet<usize>>,
@@ -41,7 +41,7 @@ impl<'a> App<'a> {
             model,
             selected_file: 0,
             selector_file: 0,
-            file_selector_open: false,
+            mode: Mode::Diff,
             line: 0,
             scroll: 0,
             hidden_hunks: vec![BTreeSet::new(); model.entries.len()],
@@ -207,31 +207,6 @@ impl<'a> App<'a> {
     }
 
     fn apply(&mut self, action: Action) {
-        if self.file_selector_open {
-            match action {
-                Action::Quit | Action::ToggleFileSelector => self.file_selector_open = false,
-                Action::ConfirmFileSelection => {
-                    self.selected_file = self.selector_file;
-                    self.file_selector_open = false;
-                    self.jump_to_selected_file();
-                }
-                Action::ScrollDown(_) | Action::JumpToNextHunk | Action::NextFile => {
-                    self.next_selector_file()
-                }
-                Action::ScrollUp(_) | Action::JumpToPreviousHunk | Action::PreviousFile => {
-                    self.previous_selector_file()
-                }
-                Action::JumpToTop => self.selector_file = 0,
-                Action::JumpToBottom => {
-                    if !self.model.entries.is_empty() {
-                        self.selector_file = self.model.entries.len() - 1;
-                    }
-                }
-                Action::CenterSelectedLine | Action::HideCurrentHunk | Action::ShowHiddenHunks => {}
-            }
-            return;
-        }
-
         match action {
             Action::Quit => self.should_quit = true,
             Action::ScrollDown(amount) => self.scroll_down(amount),
@@ -250,11 +225,24 @@ impl<'a> App<'a> {
             }
             Action::NextFile => self.next_file(),
             Action::PreviousFile => self.previous_file(),
-            Action::ToggleFileSelector => {
+            Action::OpenFileSelector => {
                 self.selector_file = self.selected_file;
-                self.file_selector_open = true;
+                self.mode = Mode::FileSelector;
             }
-            Action::ConfirmFileSelection => {}
+            Action::CloseFileSelector => self.mode = Mode::Diff,
+            Action::SelectNextFile => self.next_selector_file(),
+            Action::SelectPreviousFile => self.previous_selector_file(),
+            Action::SelectFirstFile => self.selector_file = 0,
+            Action::SelectLastFile => {
+                if !self.model.entries.is_empty() {
+                    self.selector_file = self.model.entries.len() - 1;
+                }
+            }
+            Action::ConfirmFileSelection => {
+                self.selected_file = self.selector_file;
+                self.mode = Mode::Diff;
+                self.jump_to_selected_file();
+            }
         }
     }
 
@@ -290,7 +278,7 @@ impl<'a> App<'a> {
                     continue;
                 }
 
-                if let Ok(action) = Action::try_from(key) {
+                if let Ok(action) = self.mode.action_for(key) {
                     self.apply(action);
                 }
             }
@@ -338,7 +326,7 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
     app.scroll = state.scroll;
     app.center_line = state.center_line;
 
-    if app.file_selector_open {
+    if app.mode == Mode::FileSelector {
         let selector = FileSelector {
             entries: &app.model.entries,
             theme: &app.theme,
