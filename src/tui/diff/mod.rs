@@ -98,6 +98,20 @@ impl<'a> StatefulWidget for Diff<'a> {
 
             if line.status == LineStatus::Add || line.status == LineStatus::Remove {
                 if critical_line == state.line {
+                    if let Some(color) = self.theme.selected_bg {
+                        style = style.bg(color);
+                    }
+
+                    let selected_fg = match line.status {
+                        LineStatus::Add => self.theme.selected_added_fg,
+                        LineStatus::Remove => self.theme.selected_removed_fg,
+                        _ => None,
+                    };
+
+                    if let Some(color) = selected_fg {
+                        style = style.fg(color);
+                    }
+
                     style = style.add_modifier(self.theme.selected_modifier);
                 }
 

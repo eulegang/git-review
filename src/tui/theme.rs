@@ -6,6 +6,9 @@ use ratatui::style::{Color, Modifier, Style};
 pub struct Theme {
     pub added_bg: Color,
     pub removed_bg: Color,
+    pub selected_added_fg: Option<Color>,
+    pub selected_removed_fg: Option<Color>,
+    pub selected_bg: Option<Color>,
     pub binary_bg: Color,
     pub selected_modifier: Modifier,
     pub selector_highlight: Style,
@@ -23,6 +26,18 @@ impl Theme {
 
         if let Some(color) = git_config.get_color("git-review.theme.removed-bg") {
             theme.removed_bg = color;
+        }
+
+        if let Some(color) = git_config.get_color("git-review.theme.selected-added-fg") {
+            theme.selected_added_fg = Some(color);
+        }
+
+        if let Some(color) = git_config.get_color("git-review.theme.selected-removed-fg") {
+            theme.selected_removed_fg = Some(color);
+        }
+
+        if let Some(color) = git_config.get_color("git-review.theme.selected-bg") {
+            theme.selected_bg = Some(color);
         }
 
         if let Some(color) = git_config.get_color("git-review.theme.binary-bg") {
@@ -44,8 +59,11 @@ impl Theme {
         Self {
             added_bg: Color::Green,
             removed_bg: Color::Red,
+            selected_added_fg: None,
+            selected_removed_fg: None,
+            selected_bg: None,
             binary_bg: Color::Gray,
-            selected_modifier: Modifier::BOLD.union(Modifier::REVERSED),
+            selected_modifier: Modifier::BOLD,
             selector_highlight: Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
             warning: Style::new().fg(Color::Yellow),
         }
@@ -140,11 +158,21 @@ mod tests {
         config
             .set_str("git-review.theme.added-bg", "#112233")
             .unwrap();
+        config
+            .set_str("git-review.theme.selected-added-fg", "yellow")
+            .unwrap();
+        config
+            .set_str("git-review.theme.selected-bg", "blue")
+            .unwrap();
         let mut theme = Theme::default();
 
         theme.added_bg = config.get_color("git-review.theme.added-bg").unwrap();
+        theme.selected_added_fg = config.get_color("git-review.theme.selected-added-fg");
+        theme.selected_bg = config.get_color("git-review.theme.selected-bg");
 
         assert_eq!(theme.added_bg, Color::Rgb(0x11, 0x22, 0x33));
+        assert_eq!(theme.selected_added_fg, Some(Color::Yellow));
+        assert_eq!(theme.selected_bg, Some(Color::Blue));
     }
 
     #[test]

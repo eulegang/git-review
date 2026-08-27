@@ -153,7 +153,8 @@ fn renders_line_content_and_status_backgrounds() {
 
 #[test]
 fn highlights_selected_added_or_removed_line_only() {
-    let theme = Theme::default();
+    let mut theme = Theme::default();
+    theme.selected_removed_fg = Some(Color::Yellow);
     let widget = Diff {
         hunks: &[Hunk {
             lines: vec![
@@ -187,8 +188,38 @@ fn highlights_selected_added_or_removed_line_only() {
     assert!(!buf[(x, 2)].modifier.contains(Modifier::REVERSED));
 
     assert_eq!(buf[(x, 3)].bg, Color::Red);
+    assert_eq!(buf[(x, 3)].fg, Color::Yellow);
     assert!(buf[(x, 3)].modifier.contains(Modifier::BOLD));
     assert!(buf[(x, 3)].modifier.contains(Modifier::REVERSED));
+}
+
+#[test]
+fn applies_selected_added_foreground() {
+    let mut theme = Theme::default();
+    theme.selected_added_fg = Some(Color::Blue);
+    theme.selected_bg = Some(Color::White);
+    let widget = Diff {
+        hunks: &[Hunk {
+            lines: vec![(LineStatus::Add, "+added").into()],
+        }],
+        hidden_hunks: &[],
+        theme: &theme,
+    };
+
+    let buf = render_stateful(
+        widget,
+        DiffState {
+            line: 0,
+            scroll: 0,
+            center_line: false,
+        },
+    );
+
+    let x = centered_x("+added");
+
+    assert_eq!(buf[(x, 0)].fg, Color::Blue);
+    assert_eq!(buf[(x, 0)].bg, Color::White);
+    assert!(buf[(x, 0)].modifier.contains(Modifier::BOLD));
 }
 
 #[test]
