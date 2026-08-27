@@ -34,6 +34,7 @@ pub enum Action {
     NextFile,
     PreviousFile,
     OpenFileSelector,
+    EditFile,
     CloseFileSelector,
     SelectNextFile,
     SelectPreviousFile,
@@ -59,6 +60,7 @@ fn diff_action(event: KeyEvent) -> eyre::Result<Action> {
         KeyCode::Char('n') | KeyCode::Tab => Ok(Action::NextFile),
         KeyCode::Char('p') | KeyCode::BackTab => Ok(Action::PreviousFile),
         KeyCode::Char('f') => Ok(Action::OpenFileSelector),
+        KeyCode::Char('e') => Ok(Action::EditFile),
         _ => Err(eyre::eyre!("invalid keycode")),
     }
 }

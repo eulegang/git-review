@@ -23,7 +23,8 @@ fn main() -> Result<()> {
 
         Ok(())
     } else {
-        let mut app = App::new(&model, theme);
+        let workdir = repo.workdir().map(ToOwned::to_owned);
+        let mut app = App::new(&model, theme, workdir);
 
         app.run()
     }

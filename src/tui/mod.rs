@@ -1,4 +1,7 @@
-use std::{collections::BTreeSet, io, time::Duration};
+use std::{
+    collections::BTreeSet, ffi::OsString, io, os::unix::fs::PermissionsExt, path::PathBuf,
+    process::Command, time::Duration,
+};
 
 use crossterm::{
     event::{self, Event, KeyEventKind},
@@ -6,7 +9,7 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use diff::{Diff, DiffState};
-use eyre::{Context, Result};
+use eyre::{Context, ContextCompat, Result};
 use file_selector::FileSelector;
 use ratatui::{Terminal, backend::CrosstermBackend, layout::Alignment, widgets::Paragraph};
 
@@ -33,10 +36,11 @@ pub struct App<'a> {
     center_line: bool,
     should_quit: bool,
     theme: Theme,
+    workdir: Option<PathBuf>,
 }
 
 impl<'a> App<'a> {
-    pub fn new(model: &'a Model, theme: Theme) -> Self {
+    pub fn new(model: &'a Model, theme: Theme, workdir: Option<PathBuf>) -> Self {
         Self {
             model,
             selected_file: 0,
@@ -48,6 +52,7 @@ impl<'a> App<'a> {
             center_line: false,
             should_quit: false,
             theme,
+            workdir,
         }
     }
 
@@ -229,6 +234,7 @@ impl<'a> App<'a> {
                 self.selector_file = self.selected_file;
                 self.mode = Mode::FileSelector;
             }
+            Action::EditFile => (),
             Action::CloseFileSelector => self.mode = Mode::Diff,
             Action::SelectNextFile => self.next_selector_file(),
             Action::SelectPreviousFile => self.previous_selector_file(),
@@ -264,6 +270,45 @@ impl<'a> App<'a> {
         result
     }
 
+    fn edit_current_file(
+        &self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> Result<()> {
+        let path = self
+            .model
+            .entries
+            .get(self.selected_file)
+            .map(|entry| entry.path.as_path())
+            .context("no file selected")?;
+        let editor = editor_command()?;
+
+        disable_raw_mode().context("failed to disable raw terminal mode")?;
+        execute!(terminal.backend_mut(), LeaveAlternateScreen)
+            .context("failed to leave alternate screen")?;
+        terminal.show_cursor().context("failed to show cursor")?;
+
+        let mut command = Command::new(editor);
+        command.arg(path);
+
+        if let Some(workdir) = &self.workdir {
+            command.current_dir(workdir);
+        }
+
+        let result = command.status().context("failed to launch $EDITOR");
+
+        execute!(terminal.backend_mut(), EnterAlternateScreen)
+            .context("failed to enter alternate screen")?;
+        enable_raw_mode().context("failed to enable raw terminal mode")?;
+        terminal.clear().context("failed to clear terminal")?;
+
+        let status = result?;
+        if !status.success() {
+            eyre::bail!("$EDITOR exited with status {status}");
+        }
+
+        Ok(())
+    }
+
     fn main_loop(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         while !self.should_quit {
             terminal.draw(|frame| render(frame, self))?;
@@ -279,13 +324,39 @@ impl<'a> App<'a> {
                 }
 
                 if let Ok(action) = self.mode.action_for(key) {
-                    self.apply(action);
+                    if action == Action::EditFile {
+                        self.edit_current_file(terminal)?;
+                    } else {
+                        self.apply(action);
+                    }
                 }
             }
         }
 
         Ok(())
     }
+}
+
+fn editor_command() -> Result<OsString> {
+    if let Some(editor) = std::env::var_os("EDITOR")
+        && !editor.is_empty()
+    {
+        return Ok(editor);
+    }
+
+    let path = std::env::var_os("PATH").context("$EDITOR is not set and PATH is not set")?;
+    for editor in ["vi", "nano"] {
+        if std::env::split_paths(&path).any(|directory| is_executable(&directory.join(editor))) {
+            return Ok(editor.into());
+        }
+    }
+
+    eyre::bail!("$EDITOR is not set and neither vi nor nano was found in PATH")
+}
+
+fn is_executable(path: &std::path::Path) -> bool {
+    path.metadata()
+        .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
 }
 
 fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
