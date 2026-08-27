@@ -14,6 +14,7 @@ mod unit;
 
 pub struct Diff<'a> {
     pub hunks: &'a [Hunk],
+    pub hidden_hunks: &'a [usize],
     pub theme: &'a Theme,
 }
 
@@ -33,8 +34,14 @@ impl<'a> StatefulWidget for Diff<'a> {
         buf: &mut ratatui::prelude::Buffer,
         state: &mut Self::State,
     ) {
-        let widest_line = self
+        let visible_hunks: Vec<_> = self
             .hunks
+            .iter()
+            .enumerate()
+            .filter_map(|(index, hunk)| (!self.hidden_hunks.contains(&index)).then_some(hunk))
+            .collect();
+
+        let widest_line = visible_hunks
             .iter()
             .flat_map(|hunk| &hunk.lines)
             .map(|line| line.content.chars().count().min(area.width as usize) as u16)
@@ -47,8 +54,7 @@ impl<'a> StatefulWidget for Diff<'a> {
             ..area
         };
 
-        let lines: Vec<_> = self
-            .hunks
+        let lines: Vec<_> = visible_hunks
             .iter()
             .flat_map(|hunk| hunk.lines.iter())
             .collect();

@@ -19,6 +19,7 @@ fn continues_rendering_across_hunks() {
                 lines: vec![(LineStatus::Remove, "-second").into()],
             },
         ],
+        hidden_hunks: &[],
         theme: &theme,
     };
 
@@ -42,6 +43,39 @@ fn continues_rendering_across_hunks() {
 }
 
 #[test]
+fn skips_hidden_hunks() {
+    let theme = Theme::default();
+    let widget = Diff {
+        hunks: &[
+            Hunk {
+                lines: vec![(LineStatus::Add, "+hidden").into()],
+            },
+            Hunk {
+                lines: vec![(LineStatus::Remove, "-visible").into()],
+            },
+        ],
+        hidden_hunks: &[0],
+        theme: &theme,
+    };
+
+    let buf = render_stateful(
+        widget,
+        DiffState {
+            line: 0,
+            scroll: 0,
+            center_line: false,
+        },
+    );
+
+    let x = centered_x("-visible");
+
+    assert_eq!(buf[(x, 0)].symbol(), "-");
+    assert_eq!(buf[(x + 1, 0)].symbol(), "v");
+    assert_eq!(buf[(0, 0)].bg, Color::Red);
+    assert_eq!(buf[(x, 1)].symbol(), " ");
+}
+
+#[test]
 fn renders_line_content_and_status_backgrounds() {
     let theme = Theme::default();
     let widget = Diff {
@@ -53,6 +87,7 @@ fn renders_line_content_and_status_backgrounds() {
                 (LineStatus::Binary, "binary").into(),
             ],
         }],
+        hidden_hunks: &[],
         theme: &theme,
     };
 
@@ -96,6 +131,7 @@ fn highlights_selected_added_or_removed_line_only() {
                 (LineStatus::Remove, "-removed").into(),
             ],
         }],
+        hidden_hunks: &[],
         theme: &theme,
     };
 
@@ -134,6 +170,7 @@ fn scrolls_to_keep_selected_line_visible() {
         .collect();
     let widget = Diff {
         hunks: &[Hunk { lines }],
+        hidden_hunks: &[],
         theme: &theme,
     };
 
@@ -163,6 +200,7 @@ fn centers_selected_line_even_at_file_end() {
         .collect();
     let widget = Diff {
         hunks: &[Hunk { lines }],
+        hidden_hunks: &[],
         theme: &theme,
     };
 

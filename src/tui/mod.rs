@@ -1,4 +1,4 @@
-use std::{io, time::Duration};
+use std::{collections::BTreeSet, io, time::Duration};
 
 use crossterm::{
     event::{self, Event, KeyEventKind},
@@ -29,6 +29,7 @@ pub struct App<'a> {
     file_selector_open: bool,
     line: usize,
     scroll: usize,
+    hidden_hunks: Vec<BTreeSet<usize>>,
     center_line: bool,
     should_quit: bool,
     theme: Theme,
@@ -43,6 +44,7 @@ impl<'a> App<'a> {
             file_selector_open: false,
             line: 0,
             scroll: 0,
+            hidden_hunks: vec![BTreeSet::new(); model.entries.len()],
             center_line: false,
             should_quit: false,
             theme,
@@ -75,14 +77,9 @@ impl<'a> App<'a> {
 
     fn scroll_down(&mut self, amount: u16) {
         self.line += amount as usize;
-        self.line = self.line.min(
-            self.model
-                .entries
-                .get(self.selected_file)
-                .map(|e| e.hunks.iter().map(|h| h.critical()).sum::<usize>())
-                .unwrap_or_default()
-                .saturating_sub(1),
-        )
+        self.line = self
+            .line
+            .min(self.current_file_line_count().saturating_sub(1))
     }
 
     fn scroll_up(&mut self, amount: u16) {
@@ -93,7 +90,11 @@ impl<'a> App<'a> {
         if let Some(entry) = self.model.entries.get(self.selected_file) {
             let mut first_line = 0;
 
-            for hunk in &entry.hunks {
+            for (index, hunk) in entry.hunks.iter().enumerate() {
+                if self.hunk_is_hidden(index) {
+                    continue;
+                }
+
                 let line_count = hunk.critical();
                 if line_count == 0 {
                     continue;
@@ -114,7 +115,11 @@ impl<'a> App<'a> {
             let mut first_line = 0;
             let mut previous_hunk = None;
 
-            for hunk in &entry.hunks {
+            for (index, hunk) in entry.hunks.iter().enumerate() {
+                if self.hunk_is_hidden(index) {
+                    continue;
+                }
+
                 let line_count = hunk.critical();
                 if line_count == 0 {
                     continue;
@@ -143,8 +148,62 @@ impl<'a> App<'a> {
         self.model
             .entries
             .get(self.selected_file)
-            .map(|e| e.hunks.iter().map(|h| h.critical()).sum::<usize>())
+            .map(|e| {
+                e.hunks
+                    .iter()
+                    .enumerate()
+                    .filter(|(index, _)| !self.hunk_is_hidden(*index))
+                    .map(|(_, h)| h.critical())
+                    .sum::<usize>()
+            })
             .unwrap_or_default()
+    }
+
+    fn hunk_is_hidden(&self, hunk: usize) -> bool {
+        self.hidden_hunks
+            .get(self.selected_file)
+            .is_some_and(|hidden| hidden.contains(&hunk))
+    }
+
+    fn current_hunk(&self) -> Option<usize> {
+        let entry = self.model.entries.get(self.selected_file)?;
+        let mut first_line = 0;
+
+        for (index, hunk) in entry.hunks.iter().enumerate() {
+            if self.hunk_is_hidden(index) {
+                continue;
+            }
+
+            let line_count = hunk.critical();
+            if line_count == 0 {
+                continue;
+            }
+
+            if self.line < first_line + line_count {
+                return Some(index);
+            }
+
+            first_line += line_count;
+        }
+
+        None
+    }
+
+    fn hide_current_hunk(&mut self) {
+        if let Some(hunk) = self.current_hunk() {
+            if let Some(hidden) = self.hidden_hunks.get_mut(self.selected_file) {
+                hidden.insert(hunk);
+            }
+            let last_line = self.current_file_line_count().saturating_sub(1);
+            self.line = self.line.min(last_line);
+            self.scroll = self.scroll.min(last_line);
+        }
+    }
+
+    fn show_hidden_hunks(&mut self) {
+        if let Some(hidden) = self.hidden_hunks.get_mut(self.selected_file) {
+            hidden.clear();
+        }
     }
 
     fn apply(&mut self, action: Action) {
@@ -168,7 +227,7 @@ impl<'a> App<'a> {
                         self.selector_file = self.model.entries.len() - 1;
                     }
                 }
-                Action::CenterSelectedLine => {}
+                Action::CenterSelectedLine | Action::HideCurrentHunk | Action::ShowHiddenHunks => {}
             }
             return;
         }
@@ -180,6 +239,8 @@ impl<'a> App<'a> {
             Action::JumpToNextHunk => self.jump_to_next_hunk(),
             Action::JumpToPreviousHunk => self.jump_to_previous_hunk(),
             Action::CenterSelectedLine => self.center_line = true,
+            Action::HideCurrentHunk => self.hide_current_hunk(),
+            Action::ShowHiddenHunks => self.show_hidden_hunks(),
             Action::JumpToTop => {
                 self.line = 0;
                 self.scroll = 0;
@@ -250,6 +311,12 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
         return;
     }
 
+    let hidden_hunks = app
+        .hidden_hunks
+        .get(app.selected_file)
+        .map(|hidden| hidden.iter().copied().collect::<Vec<_>>())
+        .unwrap_or_default();
+
     let diff = Diff {
         hunks: app
             .model
@@ -257,6 +324,7 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
             .get(app.selected_file)
             .map(|e| e.hunks.as_slice())
             .unwrap_or_default(),
+        hidden_hunks: &hidden_hunks,
         theme: &app.theme,
     };
 
