@@ -31,6 +31,7 @@ pub enum LineStatus {
     Remove,
     Context,
     Binary,
+    HunkHeader,
 }
 
 #[derive(Debug)]
@@ -119,6 +120,8 @@ impl<'a> TryFrom<Diff<'a>> for Model {
                         if !hunk.is_empty() {
                             hunks.push(std::mem::take(&mut hunk));
                         }
+
+                        hunk.add(LineStatus::HunkHeader, content);
                     }
                     git2::DiffLineType::ContextEOFNL
                     | git2::DiffLineType::AddEOFNL

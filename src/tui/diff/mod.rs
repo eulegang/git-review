@@ -1,5 +1,5 @@
 use ratatui::{
-    style::Style,
+    style::{Color, Modifier, Style},
     text::{Span, Text},
     widgets::{StatefulWidget, Widget},
 };
@@ -91,6 +91,9 @@ impl<'a> StatefulWidget for Diff<'a> {
                 LineStatus::Remove => Style::default().bg(self.theme.removed_bg),
                 LineStatus::Context => Style::default(),
                 LineStatus::Binary => Style::default().bg(self.theme.binary_bg),
+                LineStatus::HunkHeader => Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             };
 
             if line.status == LineStatus::Add || line.status == LineStatus::Remove {

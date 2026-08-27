@@ -8,6 +8,38 @@ fn centered_x(widest_line: &str) -> u16 {
 }
 
 #[test]
+fn renders_hunk_headers() {
+    let theme = Theme::default();
+    let widget = Diff {
+        hunks: &[Hunk {
+            lines: vec![
+                (LineStatus::HunkHeader, "@@ -1 +1 @@").into(),
+                (LineStatus::Add, "+added").into(),
+            ],
+        }],
+        hidden_hunks: &[],
+        theme: &theme,
+    };
+
+    let buf = render_stateful(
+        widget,
+        DiffState {
+            line: 0,
+            scroll: 0,
+            center_line: false,
+        },
+    );
+
+    let x = centered_x("@@ -1 +1 @@");
+
+    assert_eq!(buf[(x, 0)].symbol(), "@");
+    assert_eq!(buf[(x, 0)].fg, Color::Cyan);
+    assert!(buf[(x, 0)].modifier.contains(Modifier::BOLD));
+    assert_eq!(buf[(x, 1)].symbol(), "+");
+    assert_eq!(buf[(0, 1)].bg, Color::Green);
+}
+
+#[test]
 fn continues_rendering_across_hunks() {
     let theme = Theme::default();
     let widget = Diff {
