@@ -12,19 +12,19 @@ use ratatui::{Terminal, backend::CrosstermBackend, layout::Alignment, widgets::P
 
 use action::{Action, Mode};
 
-use crate::model::Model;
+use crate::{model::Delta, syntax::Syntax};
 
 mod action;
 mod diff;
 mod edit;
 mod file_selector;
-mod theme;
+pub mod theme;
 
 pub use theme::Theme;
 
 #[derive(Debug)]
-pub struct App<'a> {
-    model: &'a Model,
+pub struct App {
+    model: Delta,
     selected_file: usize,
     selector_file: usize,
     mode: Mode,
@@ -34,11 +34,14 @@ pub struct App<'a> {
     center_line: bool,
     should_quit: bool,
     theme: Theme,
+    syntax: Syntax,
     workdir: Option<PathBuf>,
 }
 
-impl<'a> App<'a> {
-    pub fn new(model: &'a Model, theme: Theme, workdir: Option<PathBuf>) -> Self {
+impl App {
+    pub fn new(model: Delta, theme: Theme, workdir: Option<PathBuf>, syntax: Syntax) -> Self {
+        let len = model.len();
+
         Self {
             model,
             selected_file: 0,
@@ -46,16 +49,17 @@ impl<'a> App<'a> {
             mode: Mode::Diff,
             line: 0,
             scroll: 0,
-            hidden_hunks: vec![BTreeSet::new(); model.entries.len()],
+            hidden_hunks: vec![BTreeSet::new(); len],
             center_line: false,
             should_quit: false,
             theme,
+            syntax,
             workdir,
         }
     }
 
     fn next_file(&mut self) {
-        if self.selected_file + 1 < self.model.entries.len() {
+        if self.selected_file + 1 < self.model.len() {
             self.selected_file += 1;
             self.jump_to_selected_file();
         }
@@ -69,7 +73,7 @@ impl<'a> App<'a> {
     }
 
     fn next_selector_file(&mut self) {
-        if self.selector_file + 1 < self.model.entries.len() {
+        if self.selector_file + 1 < self.model.len() {
             self.selector_file += 1;
         }
     }
@@ -90,10 +94,10 @@ impl<'a> App<'a> {
     }
 
     fn jump_to_next_hunk(&mut self) {
-        if let Some(entry) = self.model.entries.get(self.selected_file) {
+        if let Some(entry) = self.model.get(self.selected_file) {
             let mut first_line = 0;
 
-            for (index, hunk) in entry.hunks.iter().enumerate() {
+            for (index, hunk) in entry.hunks().enumerate() {
                 if self.hunk_is_hidden(index) {
                     continue;
                 }
@@ -114,11 +118,11 @@ impl<'a> App<'a> {
     }
 
     fn jump_to_previous_hunk(&mut self) {
-        if let Some(entry) = self.model.entries.get(self.selected_file) {
+        if let Some(entry) = self.model.get(self.selected_file) {
             let mut first_line = 0;
             let mut previous_hunk = None;
 
-            for (index, hunk) in entry.hunks.iter().enumerate() {
+            for (index, hunk) in entry.hunks().enumerate() {
                 if self.hunk_is_hidden(index) {
                     continue;
                 }
@@ -149,11 +153,9 @@ impl<'a> App<'a> {
 
     fn current_file_line_count(&self) -> usize {
         self.model
-            .entries
             .get(self.selected_file)
             .map(|e| {
-                e.hunks
-                    .iter()
+                e.hunks()
                     .enumerate()
                     .filter(|(index, _)| !self.hunk_is_hidden(*index))
                     .map(|(_, h)| h.critical())
@@ -169,10 +171,10 @@ impl<'a> App<'a> {
     }
 
     fn current_hunk(&self) -> Option<usize> {
-        let entry = self.model.entries.get(self.selected_file)?;
+        let entry = self.model.get(self.selected_file)?;
         let mut first_line = 0;
 
-        for (index, hunk) in entry.hunks.iter().enumerate() {
+        for (index, hunk) in entry.hunks().enumerate() {
             if self.hunk_is_hidden(index) {
                 continue;
             }
@@ -238,8 +240,8 @@ impl<'a> App<'a> {
             Action::SelectPreviousFile => self.previous_selector_file(),
             Action::SelectFirstFile => self.selector_file = 0,
             Action::SelectLastFile => {
-                if !self.model.entries.is_empty() {
-                    self.selector_file = self.model.entries.len() - 1;
+                if !self.model.len() == 0 {
+                    self.selector_file = self.model.len() - 1;
                 }
             }
             Action::ConfirmFileSelection => {
@@ -269,9 +271,9 @@ impl<'a> App<'a> {
     }
 
     fn main_loop(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
-        while !self.should_quit {
-            terminal.draw(|frame| render(frame, self))?;
+        terminal.draw(|frame| render(frame, self))?;
 
+        while !self.should_quit {
             if event::poll(Duration::from_millis(100)).context("failed to poll terminal events")? {
                 let Event::Key(key) = event::read().context("failed to read terminal event")?
                 else {
@@ -286,7 +288,6 @@ impl<'a> App<'a> {
                     if action == Action::EditFile {
                         let path = self
                             .model
-                            .entries
                             .get(self.selected_file)
                             .map(|entry| entry.path.as_path())
                             .context("no file selected")?;
@@ -296,6 +297,8 @@ impl<'a> App<'a> {
                     } else {
                         self.apply(action);
                     }
+
+                    terminal.draw(|frame| render(frame, self))?;
                 }
             }
         }
@@ -307,7 +310,7 @@ impl<'a> App<'a> {
 fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
     let area = frame.area();
 
-    if app.model.entries.is_empty() {
+    if app.model.len() == 0 {
         let warning = Paragraph::new("No changes to review")
             .alignment(Alignment::Center)
             .style(app.theme.warning);
@@ -321,13 +324,13 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
         .map(|hidden| hidden.iter().copied().collect::<Vec<_>>())
         .unwrap_or_default();
 
+    let current_entry = app.model.get(app.selected_file);
     let diff = Diff {
-        hunks: app
-            .model
-            .entries
-            .get(app.selected_file)
-            .map(|e| e.hunks.as_slice())
-            .unwrap_or_default(),
+        path: current_entry.map(|entry| entry.path.as_path()),
+        delta: &app.model,
+        selected_entry: app.selected_file,
+
+        syntax: &app.syntax,
         hidden_hunks: &hidden_hunks,
         theme: &app.theme,
     };
@@ -344,7 +347,7 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
 
     if app.mode == Mode::FileSelector {
         let selector = FileSelector {
-            entries: &app.model.entries,
+            delta: &app.model,
             theme: &app.theme,
         };
         frame.render_stateful_widget(selector, area, &mut app.selector_file);

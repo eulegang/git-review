@@ -7,7 +7,7 @@ const APP_NAME: &str = "git-review";
 const LOG_FILE: &str = "git-review.log";
 
 pub fn init() -> Result<()> {
-    let Some(state_home) = dbg!(dirs::data_dir()) else {
+    let Some(state_home) = dirs::data_dir() else {
         bail!("could not determine state directory for logs")
     };
 
@@ -26,7 +26,7 @@ pub fn init() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(file)
-        .with_ansi(false)
+        .with_ansi(true)
         .with_target(true)
         .try_init()
         .map_err(|error| eyre!("failed to initialize tracing subscriber: {error}"))?;

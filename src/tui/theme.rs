@@ -1,5 +1,5 @@
 use eyre::{Context, Result, bail};
-use git2::{Config as GitConfig, Repository};
+use git2::Config as GitConfig;
 use ratatui::style::{Color, Modifier, Style};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -12,12 +12,12 @@ pub struct Theme {
     pub binary_bg: Color,
     pub selected_modifier: Modifier,
     pub selector_highlight: Style,
+    pub hunk_header: Style,
     pub warning: Style,
 }
 
 impl Theme {
-    pub fn load(repo: &Repository) -> Result<Self> {
-        let git_config = repo.config().context("failed to open Git config")?;
+    pub fn load(git_config: &GitConfig) -> Result<Self> {
         let mut theme = Self::default();
 
         if let Some(color) = git_config.get_color("git-review.theme.added-bg") {
@@ -48,6 +48,10 @@ impl Theme {
             theme.selector_highlight = theme.selector_highlight.fg(color);
         }
 
+        if let Some(color) = git_config.get_color("git-review.theme.hunk-header-fg") {
+            theme.hunk_header = theme.hunk_header.fg(color);
+        }
+
         if let Some(color) = git_config.get_color("git-review.theme.warning-fg") {
             theme.warning = theme.warning.fg(color);
         }
@@ -65,6 +69,7 @@ impl Theme {
             binary_bg: Color::Gray,
             selected_modifier: Modifier::BOLD,
             selector_highlight: Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            hunk_header: Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD),
             warning: Style::new().fg(Color::Yellow),
         }
     }
@@ -76,7 +81,7 @@ impl Default for Theme {
     }
 }
 
-fn parse_color(raw: &str) -> Result<Color> {
+pub fn parse_color(raw: &str) -> Result<Color> {
     let color = raw.trim().to_ascii_lowercase();
 
     if color == "reset" || color == "default" {
@@ -164,15 +169,22 @@ mod tests {
         config
             .set_str("git-review.theme.selected-bg", "blue")
             .unwrap();
+        config
+            .set_str("git-review.theme.hunk-header-fg", "magenta")
+            .unwrap();
         let mut theme = Theme::default();
 
         theme.added_bg = config.get_color("git-review.theme.added-bg").unwrap();
         theme.selected_added_fg = config.get_color("git-review.theme.selected-added-fg");
         theme.selected_bg = config.get_color("git-review.theme.selected-bg");
+        theme.hunk_header = theme
+            .hunk_header
+            .fg(config.get_color("git-review.theme.hunk-header-fg").unwrap());
 
         assert_eq!(theme.added_bg, Color::Rgb(0x11, 0x22, 0x33));
         assert_eq!(theme.selected_added_fg, Some(Color::Yellow));
         assert_eq!(theme.selected_bg, Some(Color::Blue));
+        assert_eq!(theme.hunk_header.fg, Some(Color::Magenta));
     }
 
     #[test]

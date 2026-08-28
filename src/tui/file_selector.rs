@@ -2,11 +2,12 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, StatefulWidget, Widget},
 };
+use tracing::debug;
 
-use crate::{model::Entry, tui::Theme};
+use crate::{model::Delta, tui::Theme};
 
 pub struct FileSelector<'a> {
-    pub entries: &'a [Entry],
+    pub delta: &'a Delta,
     pub theme: &'a Theme,
 }
 
@@ -14,12 +15,13 @@ impl StatefulWidget for FileSelector<'_> {
     type State = usize;
 
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer, state: &mut Self::State) {
+        debug!("rendering file selector");
         let area = centered_rect(70, 70, area);
         Clear.render(area, buf);
 
         let files: Vec<ListItem> = self
-            .entries
-            .iter()
+            .delta
+            .entries()
             .map(|entry| ListItem::new(entry.path.display().to_string()))
             .collect();
         let selector = List::new(files)
