@@ -138,15 +138,36 @@ impl<'a> StatefulWidget for Diff<'a> {
             return;
         };
 
-        let render_area = self.effective_bounds(area);
-        self.rebalance_state(area, state);
+        let path_height = u16::from(self.path.is_some());
+        let diff_area = Rect {
+            y: area.y.saturating_add(path_height),
+            height: area.height.saturating_sub(path_height),
+            ..area
+        };
+        if diff_area.height == 0 {
+            return;
+        }
+
+        let render_area = self.effective_bounds(diff_area);
+        if let Some(path) = self.path {
+            Span::styled(path.display().to_string(), self.theme.hunk_header).render(
+                Rect {
+                    y: area.y,
+                    height: 1,
+                    ..render_area
+                },
+                buf,
+            );
+        }
+
+        self.rebalance_state(diff_area, state);
 
         let header_style = self.theme.hunk_header;
 
         let mut text: Text = Text::default();
 
         {
-            let mut window = window::Window::new(state.scroll, area.height as usize);
+            let mut window = window::Window::new(state.scroll, diff_area.height as usize);
             let mut j = 0usize;
             let mut crit = 0;
 
@@ -167,9 +188,9 @@ impl<'a> StatefulWidget for Diff<'a> {
 
                     buf.set_style(
                         ratatui::prelude::Rect {
-                            y: area.y + j as u16,
+                            y: diff_area.y + j as u16,
                             height: 1,
-                            ..area
+                            ..diff_area
                         },
                         style,
                     );
