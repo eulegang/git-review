@@ -45,7 +45,7 @@ pub enum Action {
 
 fn diff_action(event: KeyEvent) -> eyre::Result<Action> {
     match event.code {
-        KeyCode::Char('q') | KeyCode::Esc => Ok(Action::Quit),
+        KeyCode::Char('q') => Ok(Action::Quit),
         KeyCode::Char('j') | KeyCode::Down => Ok(Action::ScrollDown(1)),
         KeyCode::Char('k') | KeyCode::Up => Ok(Action::ScrollUp(1)),
         KeyCode::PageDown => Ok(Action::ScrollDown(PAGE_SCROLL_LINES)),
@@ -84,5 +84,33 @@ fn file_selector_action(event: KeyEvent) -> eyre::Result<Action> {
         KeyCode::Char('G') | KeyCode::End => Ok(Action::SelectLastFile),
         KeyCode::Enter => Ok(Action::ConfirmFileSelection),
         _ => Err(eyre::eyre!("invalid keycode")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn escape_does_not_quit_diff_mode() {
+        assert!(Mode::Diff.action_for(KeyEvent::from(KeyCode::Esc)).is_err());
+    }
+
+    #[test]
+    fn q_still_quits_diff_mode() {
+        assert_eq!(
+            Mode::Diff.action_for(KeyEvent::from(KeyCode::Char('q'))).unwrap(),
+            Action::Quit
+        );
+    }
+
+    #[test]
+    fn escape_closes_file_selector() {
+        assert_eq!(
+            Mode::FileSelector
+                .action_for(KeyEvent::from(KeyCode::Esc))
+                .unwrap(),
+            Action::CloseFileSelector
+        );
     }
 }
