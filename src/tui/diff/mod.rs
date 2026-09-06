@@ -63,23 +63,31 @@ impl Diff<'_> {
         };
 
         let mut critical_line = 0;
+        let mut visual_line = 0;
 
         let mut selected = None::<usize>;
-        'check: for hunk in entry.hunks() {
-            for (visual_line, line) in hunk.lines().enumerate() {
-                if matches!(line.status(), LineStatus::Add | LineStatus::Remove) {
+        for (hunk_index, hunk) in entry.hunks().enumerate() {
+            if self.hidden_hunks.contains(&hunk_index) {
+                continue;
+            }
+
+            visual_line += 1; // hunk header
+
+            for line in hunk.lines() {
+                if line.status().is_critical() {
                     if critical_line == state.line {
-                        selected = Some(visual_line);
-                        break 'check;
+                        selected.get_or_insert(visual_line);
                     }
 
                     critical_line += 1;
                 }
+
+                visual_line += 1;
             }
         }
 
+        let visible_height = area.height as usize;
         if let Some(selected) = selected {
-            let visible_height = area.height as usize;
             if state.center_line {
                 state.scroll = selected.saturating_sub(visible_height / 2);
             } else if selected < state.scroll {
@@ -178,23 +186,22 @@ impl<'a> StatefulWidget for Diff<'a> {
                 if window.visible() {
                     text.push_line(Span::styled(hunk.header().to_string(), header_style));
                     j += 1;
-                    window.inc();
                 }
+                window.inc();
 
                 for line in hunk.lines() {
                     let style =
                         self.style_for(&line, line.status().is_critical() && crit == state.line);
 
-                    buf.set_style(
-                        ratatui::prelude::Rect {
-                            y: diff_area.y + j as u16,
-                            height: 1,
-                            ..diff_area
-                        },
-                        style,
-                    );
-
                     if window.visible() {
+                        buf.set_style(
+                            ratatui::prelude::Rect {
+                                y: diff_area.y + j as u16,
+                                height: 1,
+                                ..diff_area
+                            },
+                            style,
+                        );
                         text.push_line(line.highlight());
                         // if let Some(syntax) = syntax.as_mut() {
                         //     text.push_line(line.highlight());

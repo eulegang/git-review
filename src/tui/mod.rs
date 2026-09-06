@@ -1,7 +1,7 @@
 use std::{collections::BTreeSet, io, path::PathBuf, time::Duration};
 
 use crossterm::{
-    event::{self, Event, KeyEventKind},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind, MouseEventKind},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -253,7 +253,8 @@ impl App {
     pub fn run(&mut self) -> Result<()> {
         enable_raw_mode().context("failed to enable raw terminal mode")?;
         let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen).context("failed to enter alternate screen")?;
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
+            .context("failed to enter alternate screen")?;
 
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend).context("failed to initialize terminal")?;
@@ -261,8 +262,12 @@ impl App {
         let result = self.main_loop(&mut terminal);
 
         disable_raw_mode().context("failed to disable raw terminal mode")?;
-        execute!(terminal.backend_mut(), LeaveAlternateScreen)
-            .context("failed to leave alternate screen")?;
+        execute!(
+            terminal.backend_mut(),
+            DisableMouseCapture,
+            LeaveAlternateScreen
+        )
+        .context("failed to leave alternate screen")?;
         terminal.show_cursor().context("failed to show cursor")?;
 
         result
@@ -273,16 +278,25 @@ impl App {
 
         while !self.should_quit {
             if event::poll(Duration::from_millis(100)).context("failed to poll terminal events")? {
-                let Event::Key(key) = event::read().context("failed to read terminal event")?
-                else {
-                    continue;
+                let action = match event::read().context("failed to read terminal event")? {
+                    Event::Key(key) if key.kind == KeyEventKind::Press => {
+                        self.mode.action_for(key).ok()
+                    }
+                    Event::Mouse(mouse) => match (self.mode, mouse.kind) {
+                        (Mode::Diff, MouseEventKind::ScrollDown) => Some(Action::ScrollDown(3)),
+                        (Mode::Diff, MouseEventKind::ScrollUp) => Some(Action::ScrollUp(3)),
+                        (Mode::FileSelector, MouseEventKind::ScrollDown) => {
+                            Some(Action::SelectNextFile)
+                        }
+                        (Mode::FileSelector, MouseEventKind::ScrollUp) => {
+                            Some(Action::SelectPreviousFile)
+                        }
+                        _ => None,
+                    },
+                    _ => None,
                 };
 
-                if key.kind != KeyEventKind::Press {
-                    continue;
-                }
-
-                if let Ok(action) = self.mode.action_for(key) {
+                if let Some(action) = action {
                     if action == Action::EditFile {
                         let path = self
                             .model

@@ -33,14 +33,13 @@ fn widget<'a>(
     delta: &'a Delta,
     hidden_hunks: &'a [usize],
     theme: &'a Theme,
-    syntax: &'a Syntax,
+    _syntax: &'a Syntax,
 ) -> Diff<'a> {
     Diff {
         path: delta.get(0).map(|entry| entry.path.as_path()),
         selected_entry: 0,
         delta,
         hidden_hunks,
-        syntax,
         theme,
     }
 }

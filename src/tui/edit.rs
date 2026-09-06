@@ -1,6 +1,7 @@
 use std::{ffi::OsString, os::unix::fs::PermissionsExt, path::Path, process::Command};
 
 use crossterm::{
+    event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -72,15 +73,23 @@ struct Cooked;
 impl Cooked {
     fn enable(terminal: &mut Term) -> eyre::Result<Self> {
         disable_raw_mode().context("failed to disable raw terminal mode")?;
-        execute!(terminal.backend_mut(), LeaveAlternateScreen)
-            .context("failed to leave alternate screen")?;
+        execute!(
+            terminal.backend_mut(),
+            DisableMouseCapture,
+            LeaveAlternateScreen
+        )
+        .context("failed to leave alternate screen")?;
         terminal.show_cursor().context("failed to show cursor")?;
         Ok(Cooked)
     }
 
     fn disable(self, terminal: &mut Term) -> eyre::Result<()> {
-        execute!(terminal.backend_mut(), EnterAlternateScreen)
-            .context("failed to enter alternate screen")?;
+        execute!(
+            terminal.backend_mut(),
+            EnterAlternateScreen,
+            EnableMouseCapture
+        )
+        .context("failed to enter alternate screen")?;
         enable_raw_mode().context("failed to enable raw terminal mode")?;
         terminal.clear().context("failed to clear terminal")?;
 
