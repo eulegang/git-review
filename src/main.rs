@@ -35,7 +35,7 @@ fn main() -> Result<()> {
     debug!("loaded model {:#?}", model);
 
     let workdir = repo.workdir().map(ToOwned::to_owned);
-    let mut app = App::new(model, theme, workdir, syntax);
+    let mut app = App::new(model, theme, workdir);
 
     app.run()
 }

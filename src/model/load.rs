@@ -1,8 +1,6 @@
-use std::path::Path;
-
 use eyre::bail;
-use git2::{DiffDelta, DiffLine, Oid};
-use tracing::{debug, error, trace};
+use git2::{DiffDelta, DiffLine};
+use tracing::{debug, error};
 
 use super::*;
 

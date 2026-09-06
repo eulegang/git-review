@@ -25,7 +25,7 @@ impl Entry {
 }
 
 impl Hunk<'_> {
-    pub fn lines(&self) -> impl std::iter::Iterator<Item = HunkLine> {
+    pub fn lines(&self) -> impl std::iter::Iterator<Item = HunkLine<'_>> {
         self.diff_locs.iter().map(|&diff_loc| HunkLine {
             entry: &self.entry,
             diff_loc,
