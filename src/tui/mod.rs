@@ -278,6 +278,7 @@ impl App {
 
         while !self.should_quit {
             if event::poll(Duration::from_millis(100)).context("failed to poll terminal events")? {
+                let mut needs_redraw = false;
                 let action = match event::read().context("failed to read terminal event")? {
                     Event::Key(key) if key.kind == KeyEventKind::Press => {
                         self.mode.action_for(key).ok()
@@ -293,6 +294,10 @@ impl App {
                         }
                         _ => None,
                     },
+                    Event::Resize(_, _) => {
+                        needs_redraw = true;
+                        None
+                    }
                     _ => None,
                 };
 
@@ -310,6 +315,10 @@ impl App {
                         self.apply(action);
                     }
 
+                    needs_redraw = true;
+                }
+
+                if needs_redraw {
                     terminal.draw(|frame| render(frame, self))?;
                 }
             }
