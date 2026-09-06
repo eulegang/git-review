@@ -12,7 +12,7 @@ use ratatui::{Terminal, backend::CrosstermBackend, layout::Alignment, widgets::P
 
 use action::{Action, Mode};
 
-use crate::{model::Delta, syntax::Syntax};
+use crate::model::Delta;
 
 mod action;
 mod diff;
@@ -34,12 +34,11 @@ pub struct App {
     center_line: bool,
     should_quit: bool,
     theme: Theme,
-    syntax: Syntax,
     workdir: Option<PathBuf>,
 }
 
 impl App {
-    pub fn new(model: Delta, theme: Theme, workdir: Option<PathBuf>, syntax: Syntax) -> Self {
+    pub fn new(model: Delta, theme: Theme, workdir: Option<PathBuf>) -> Self {
         let len = model.len();
 
         Self {
@@ -53,7 +52,6 @@ impl App {
             center_line: false,
             should_quit: false,
             theme,
-            syntax,
             workdir,
         }
     }
@@ -330,7 +328,6 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
         delta: &app.model,
         selected_entry: app.selected_file,
 
-        syntax: &app.syntax,
         hidden_hunks: &hidden_hunks,
         theme: &app.theme,
     };

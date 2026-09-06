@@ -10,7 +10,6 @@ use tracing::debug;
 
 use crate::{
     model::{Delta, HunkLine, LineStatus},
-    syntax::Syntax,
     tui::Theme,
 };
 
@@ -26,7 +25,6 @@ pub struct Diff<'a> {
     pub delta: &'a Delta,
     pub hidden_hunks: &'a [usize],
 
-    pub syntax: &'a Syntax,
     pub theme: &'a Theme,
 }
 
@@ -134,6 +132,7 @@ impl<'a> StatefulWidget for Diff<'a> {
         state: &mut Self::State,
     ) {
         debug!("rendering diff");
+
         let Some(entry) = self.delta.get(self.selected_entry) else {
             return;
         };
