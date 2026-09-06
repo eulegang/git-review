@@ -101,7 +101,13 @@ impl Diff<'_> {
         };
 
         if selected {
-            if let Some(color) = self.theme.selected_bg {
+            let selected_bg = match line.status() {
+                LineStatus::Add => self.theme.selected_added_bg,
+                LineStatus::Remove => self.theme.selected_removed_bg,
+                _ => None,
+            };
+
+            if let Some(color) = selected_bg {
                 style = style.bg(color);
             }
 

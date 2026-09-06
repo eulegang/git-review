@@ -99,7 +99,9 @@ mod tests {
     #[test]
     fn q_still_quits_diff_mode() {
         assert_eq!(
-            Mode::Diff.action_for(KeyEvent::from(KeyCode::Char('q'))).unwrap(),
+            Mode::Diff
+                .action_for(KeyEvent::from(KeyCode::Char('q')))
+                .unwrap(),
             Action::Quit
         );
     }
