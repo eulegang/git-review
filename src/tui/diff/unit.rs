@@ -25,16 +25,7 @@ fn config() -> git2::Config {
     git2::Config::open(&path).expect("open test config")
 }
 
-fn syntax() -> Syntax {
-    Syntax::new(&config())
-}
-
-fn widget<'a>(
-    delta: &'a Delta,
-    hidden_hunks: &'a [usize],
-    theme: &'a Theme,
-    _syntax: &'a Syntax,
-) -> Diff<'a> {
+fn widget<'a>(delta: &'a Delta, hidden_hunks: &'a [usize], theme: &'a Theme) -> Diff<'a> {
     Diff {
         path: delta.get(0).map(|entry| entry.path.as_path()),
         selected_entry: 0,
@@ -47,14 +38,13 @@ fn widget<'a>(
 #[test]
 fn renders_hunk_headers() {
     let theme = Theme::default();
-    let syntax = syntax();
     let delta = Delta::from_test_hunks(vec![(
         "@@ -1 +1 @@",
         vec![(LineStatus::Add, "+added".to_string())],
     )]);
 
     let buf = render_stateful(
-        widget(&delta, &[], &theme, &syntax),
+        widget(&delta, &[], &theme),
         DiffState {
             line: 0,
             scroll: 0,
@@ -76,7 +66,6 @@ fn renders_hunk_headers() {
 #[test]
 fn continues_rendering_across_hunks() {
     let theme = Theme::default();
-    let syntax = syntax();
     let delta = Delta::from_test_hunks(vec![
         ("@@ -1 +1 @@", vec![(LineStatus::Add, "+first".to_string())]),
         (
@@ -86,7 +75,7 @@ fn continues_rendering_across_hunks() {
     ]);
 
     let buf = render_stateful(
-        widget(&delta, &[], &theme, &syntax),
+        widget(&delta, &[], &theme),
         DiffState {
             line: 0,
             scroll: 0,
@@ -107,7 +96,6 @@ fn continues_rendering_across_hunks() {
 #[test]
 fn skips_hidden_hunks() {
     let theme = Theme::default();
-    let syntax = syntax();
     let hidden = [0];
     let delta = Delta::from_test_hunks(vec![
         (
@@ -121,7 +109,7 @@ fn skips_hidden_hunks() {
     ]);
 
     let buf = render_stateful(
-        widget(&delta, &hidden, &theme, &syntax),
+        widget(&delta, &hidden, &theme),
         DiffState {
             line: 0,
             scroll: 0,
@@ -140,7 +128,6 @@ fn skips_hidden_hunks() {
 #[test]
 fn renders_line_content_and_status_backgrounds() {
     let theme = Theme::default();
-    let syntax = syntax();
     let delta = Delta::from_test_hunks(vec![(
         "@@ -1 +1 @@",
         vec![
@@ -152,7 +139,7 @@ fn renders_line_content_and_status_backgrounds() {
     )]);
 
     let buf = render_stateful(
-        widget(&delta, &[], &theme, &syntax),
+        widget(&delta, &[], &theme),
         DiffState {
             line: 99,
             scroll: 0,
@@ -183,7 +170,6 @@ fn renders_line_content_and_status_backgrounds() {
 fn highlights_selected_added_or_removed_line_only() {
     let mut theme = Theme::default();
     theme.selected_removed_fg = Some(Color::Yellow);
-    let syntax = syntax();
     let delta = Delta::from_test_hunks(vec![(
         "@@ -1 +1 @@",
         vec![
@@ -195,7 +181,7 @@ fn highlights_selected_added_or_removed_line_only() {
     )]);
 
     let buf = render_stateful(
-        widget(&delta, &[], &theme, &syntax),
+        widget(&delta, &[], &theme),
         DiffState {
             line: 1,
             scroll: 0,
@@ -219,18 +205,17 @@ fn highlights_selected_added_or_removed_line_only() {
 }
 
 #[test]
-fn applies_selected_added_foreground() {
+fn applies_selected_added_foreground_and_background() {
     let mut theme = Theme::default();
     theme.selected_added_fg = Some(Color::Blue);
-    theme.selected_bg = Some(Color::White);
-    let syntax = syntax();
+    theme.selected_added_bg = Some(Color::White);
     let delta = Delta::from_test_hunks(vec![(
         "@@ -1 +1 @@",
         vec![(LineStatus::Add, "+added".to_string())],
     )]);
 
     let buf = render_stateful(
-        widget(&delta, &[], &theme, &syntax),
+        widget(&delta, &[], &theme),
         DiffState {
             line: 0,
             scroll: 0,
@@ -239,6 +224,32 @@ fn applies_selected_added_foreground() {
     );
 
     let x = centered_x("+added");
+
+    assert_eq!(buf[(x, 2)].fg, Color::Blue);
+    assert_eq!(buf[(x, 2)].bg, Color::White);
+    assert!(buf[(x, 2)].modifier.contains(Modifier::BOLD));
+}
+
+#[test]
+fn applies_selected_removed_foreground_and_background() {
+    let mut theme = Theme::default();
+    theme.selected_removed_fg = Some(Color::Blue);
+    theme.selected_removed_bg = Some(Color::White);
+    let delta = Delta::from_test_hunks(vec![(
+        "@@ -1 +1 @@",
+        vec![(LineStatus::Remove, "-removed".to_string())],
+    )]);
+
+    let buf = render_stateful(
+        widget(&delta, &[], &theme),
+        DiffState {
+            line: 0,
+            scroll: 0,
+            center_line: false,
+        },
+    );
+
+    let x = centered_x("-removed");
 
     assert_eq!(buf[(x, 2)].fg, Color::Blue);
     assert_eq!(buf[(x, 2)].bg, Color::White);
@@ -260,7 +271,7 @@ fn syntax_highlights_rust_diff_lines() {
     syntax.highlight(&mut delta);
 
     let buf = render_stateful(
-        widget(&delta, &[], &theme, &syntax),
+        widget(&delta, &[], &theme),
         DiffState {
             line: 99,
             scroll: 0,
@@ -277,7 +288,6 @@ fn syntax_highlights_rust_diff_lines() {
 #[test]
 fn scrolls_to_keep_selected_line_visible() {
     let theme = Theme::default();
-    let syntax = syntax();
     let lines = (0..50)
         .map(|i| (LineStatus::Add, format!("+line {i}")))
         .collect();
@@ -288,7 +298,7 @@ fn scrolls_to_keep_selected_line_visible() {
         scroll: 0,
         center_line: false,
     };
-    let buf = render_stateful(widget(&delta, &[], &theme, &syntax), state);
+    let buf = render_stateful(widget(&delta, &[], &theme), state);
 
     let x = centered_x("+line 10");
 
@@ -301,7 +311,6 @@ fn scrolls_to_keep_selected_line_visible() {
 #[test]
 fn centers_selected_line_even_at_file_end() {
     let theme = Theme::default();
-    let syntax = syntax();
     let lines = (0..50)
         .map(|i| (LineStatus::Add, format!("+line {i}")))
         .collect();
@@ -312,7 +321,7 @@ fn centers_selected_line_even_at_file_end() {
         scroll: 0,
         center_line: true,
     };
-    let buf = render_stateful(widget(&delta, &[], &theme, &syntax), state);
+    let buf = render_stateful(widget(&delta, &[], &theme), state);
 
     let x = centered_x("+line 10");
 

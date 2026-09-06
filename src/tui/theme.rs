@@ -8,7 +8,8 @@ pub struct Theme {
     pub removed_bg: Color,
     pub selected_added_fg: Option<Color>,
     pub selected_removed_fg: Option<Color>,
-    pub selected_bg: Option<Color>,
+    pub selected_added_bg: Option<Color>,
+    pub selected_removed_bg: Option<Color>,
     pub binary_bg: Color,
     pub selected_modifier: Modifier,
     pub selector_highlight: Style,
@@ -36,8 +37,12 @@ impl Theme {
             theme.selected_removed_fg = Some(color);
         }
 
-        if let Some(color) = git_config.get_color("git-review.theme.selected-bg") {
-            theme.selected_bg = Some(color);
+        if let Some(color) = git_config.get_color("git-review.theme.selected-added-bg") {
+            theme.selected_added_bg = Some(color);
+        }
+
+        if let Some(color) = git_config.get_color("git-review.theme.selected-removed-bg") {
+            theme.selected_removed_bg = Some(color);
         }
 
         if let Some(color) = git_config.get_color("git-review.theme.binary-bg") {
@@ -65,7 +70,8 @@ impl Theme {
             removed_bg: Color::Red,
             selected_added_fg: None,
             selected_removed_fg: None,
-            selected_bg: None,
+            selected_added_bg: None,
+            selected_removed_bg: None,
             binary_bg: Color::Gray,
             selected_modifier: Modifier::BOLD,
             selector_highlight: Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
@@ -167,7 +173,10 @@ mod tests {
             .set_str("git-review.theme.selected-added-fg", "yellow")
             .unwrap();
         config
-            .set_str("git-review.theme.selected-bg", "blue")
+            .set_str("git-review.theme.selected-added-bg", "blue")
+            .unwrap();
+        config
+            .set_str("git-review.theme.selected-removed-bg", "red")
             .unwrap();
         config
             .set_str("git-review.theme.hunk-header-fg", "magenta")
@@ -176,14 +185,16 @@ mod tests {
 
         theme.added_bg = config.get_color("git-review.theme.added-bg").unwrap();
         theme.selected_added_fg = config.get_color("git-review.theme.selected-added-fg");
-        theme.selected_bg = config.get_color("git-review.theme.selected-bg");
+        theme.selected_added_bg = config.get_color("git-review.theme.selected-added-bg");
+        theme.selected_removed_bg = config.get_color("git-review.theme.selected-removed-bg");
         theme.hunk_header = theme
             .hunk_header
             .fg(config.get_color("git-review.theme.hunk-header-fg").unwrap());
 
         assert_eq!(theme.added_bg, Color::Rgb(0x11, 0x22, 0x33));
         assert_eq!(theme.selected_added_fg, Some(Color::Yellow));
-        assert_eq!(theme.selected_bg, Some(Color::Blue));
+        assert_eq!(theme.selected_added_bg, Some(Color::Blue));
+        assert_eq!(theme.selected_removed_bg, Some(Color::Red));
         assert_eq!(theme.hunk_header.fg, Some(Color::Magenta));
     }
 
