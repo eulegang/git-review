@@ -11,6 +11,7 @@ static EVENT_SENDER: OnceLock<Mutex<Option<Sender<AppEvent>>>> = OnceLock::new()
 #[derive(Debug, Clone)]
 pub enum AppEvent {
     Key(KeyEvent),
+    Redraw,
 }
 
 /// An installed global event channel.
@@ -52,8 +53,17 @@ pub fn sender() -> Option<Sender<AppEvent>> {
 
 /// Send a key event through the global event channel.
 pub fn send_key(key: KeyEvent) -> Result<(), mpsc::SendError<AppEvent>> {
+    send(AppEvent::Key(key))
+}
+
+/// Request that the UI redraw through the global event channel.
+pub fn send_redraw() -> Result<(), mpsc::SendError<AppEvent>> {
+    send(AppEvent::Redraw)
+}
+
+fn send(event: AppEvent) -> Result<(), mpsc::SendError<AppEvent>> {
     if let Some(sender) = sender() {
-        sender.send(AppEvent::Key(key))
+        sender.send(event)
     } else {
         Ok(())
     }

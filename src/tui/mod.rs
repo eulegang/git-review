@@ -302,7 +302,7 @@ impl App {
                         _ => None,
                     },
                     Event::Resize(_, _) => {
-                        needs_redraw = true;
+                        eventing::send_redraw().context("failed to send redraw event")?;
                         None
                     }
                     _ => None,
@@ -322,6 +322,7 @@ impl App {
                             needs_redraw = true;
                         }
                     }
+                    AppEvent::Redraw => needs_redraw = true,
                 }
             }
 
