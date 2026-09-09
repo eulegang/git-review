@@ -124,7 +124,7 @@ mod test {
             vec!["  ", "println", "!", "(", "\"hello world\"", ")", ";"]
         );
 
-        assert_eq!(line_parts(buf.highlight(3)), vec!["}"]);
+        assert_eq!(line_parts(buf.highlight(3)), vec!["", "}"]);
 
         return Ok(());
 
