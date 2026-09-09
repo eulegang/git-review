@@ -12,7 +12,10 @@ use ratatui::{Terminal, backend::CrosstermBackend, layout::Alignment, widgets::P
 
 use action::{Action, Mode};
 
-use crate::model::Delta;
+use crate::{
+    eventing::{self, AppEvent},
+    model::Delta,
+};
 
 mod action;
 mod diff;
@@ -274,14 +277,18 @@ impl App {
     }
 
     fn main_loop(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+        let events = eventing::install();
+
         terminal.draw(|frame| render(frame, self))?;
 
         while !self.should_quit {
+            let mut needs_redraw = false;
+
             if event::poll(Duration::from_millis(100)).context("failed to poll terminal events")? {
-                let mut needs_redraw = false;
                 let action = match event::read().context("failed to read terminal event")? {
                     Event::Key(key) if key.kind == KeyEventKind::Press => {
-                        self.mode.action_for(key).ok()
+                        eventing::send_key(key).context("failed to send key event")?;
+                        None
                     }
                     Event::Mouse(mouse) => match (self.mode, mouse.kind) {
                         (Mode::Diff, MouseEventKind::ScrollDown) => Some(Action::ScrollDown(3)),
@@ -302,26 +309,46 @@ impl App {
                 };
 
                 if let Some(action) = action {
-                    if action == Action::EditFile {
-                        let path = self
-                            .model
-                            .get(self.selected_file)
-                            .map(|entry| entry.path.as_path())
-                            .context("no file selected")?;
-
-                        let edit = edit::Edit::new(path, self.workdir.as_deref());
-                        edit.run(terminal)?;
-                    } else {
-                        self.apply(action);
-                    }
-
+                    self.handle_action(action, terminal)?;
                     needs_redraw = true;
                 }
+            }
 
-                if needs_redraw {
-                    terminal.draw(|frame| render(frame, self))?;
+            while let Ok(app_event) = events.receiver().try_recv() {
+                match app_event {
+                    AppEvent::Key(key) => {
+                        if let Ok(action) = self.mode.action_for(key) {
+                            self.handle_action(action, terminal)?;
+                            needs_redraw = true;
+                        }
+                    }
                 }
             }
+
+            if needs_redraw {
+                terminal.draw(|frame| render(frame, self))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn handle_action(
+        &mut self,
+        action: Action,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> Result<()> {
+        if action == Action::EditFile {
+            let path = self
+                .model
+                .get(self.selected_file)
+                .map(|entry| entry.path.as_path())
+                .context("no file selected")?;
+
+            let edit = edit::Edit::new(path, self.workdir.as_deref());
+            edit.run(terminal)?;
+        } else {
+            self.apply(action);
         }
 
         Ok(())

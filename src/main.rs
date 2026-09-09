@@ -1,4 +1,5 @@
 mod cli;
+mod eventing;
 mod logging;
 mod model;
 mod syntax;
