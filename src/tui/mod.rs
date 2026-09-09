@@ -1,7 +1,7 @@
-use std::{collections::BTreeSet, io, path::PathBuf, time::Duration};
+use std::{collections::BTreeSet, io, path::PathBuf};
 
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind, MouseEventKind},
+    event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -21,6 +21,7 @@ mod action;
 mod diff;
 mod edit;
 mod file_selector;
+mod input;
 pub mod theme;
 
 pub use theme::Theme;
@@ -278,52 +279,16 @@ impl App {
 
     fn main_loop(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         let events = eventing::install();
+        let _input = input::spawn()?;
 
         terminal.draw(|frame| render(frame, self))?;
 
         while !self.should_quit {
-            let mut needs_redraw = false;
-
-            if event::poll(Duration::from_millis(100)).context("failed to poll terminal events")? {
-                let action = match event::read().context("failed to read terminal event")? {
-                    Event::Key(key) if key.kind == KeyEventKind::Press => {
-                        eventing::send_key(key).context("failed to send key event")?;
-                        None
-                    }
-                    Event::Mouse(mouse) => match (self.mode, mouse.kind) {
-                        (Mode::Diff, MouseEventKind::ScrollDown) => Some(Action::ScrollDown(3)),
-                        (Mode::Diff, MouseEventKind::ScrollUp) => Some(Action::ScrollUp(3)),
-                        (Mode::FileSelector, MouseEventKind::ScrollDown) => {
-                            Some(Action::SelectNextFile)
-                        }
-                        (Mode::FileSelector, MouseEventKind::ScrollUp) => {
-                            Some(Action::SelectPreviousFile)
-                        }
-                        _ => None,
-                    },
-                    Event::Resize(_, _) => {
-                        eventing::send_redraw().context("failed to send redraw event")?;
-                        None
-                    }
-                    _ => None,
-                };
-
-                if let Some(action) = action {
-                    self.handle_action(action, terminal)?;
-                    needs_redraw = true;
-                }
-            }
+            let app_event = events.receiver().recv().context("event channel closed")?;
+            let mut needs_redraw = self.handle_app_event(app_event, terminal)?;
 
             while let Ok(app_event) = events.receiver().try_recv() {
-                match app_event {
-                    AppEvent::Key(key) => {
-                        if let Ok(action) = self.mode.action_for(key) {
-                            self.handle_action(action, terminal)?;
-                            needs_redraw = true;
-                        }
-                    }
-                    AppEvent::Redraw => needs_redraw = true,
-                }
+                needs_redraw |= self.handle_app_event(app_event, terminal)?;
             }
 
             if needs_redraw {
@@ -332,6 +297,32 @@ impl App {
         }
 
         Ok(())
+    }
+
+    fn handle_app_event(
+        &mut self,
+        app_event: AppEvent,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> Result<bool> {
+        match app_event {
+            AppEvent::Key(key) => {
+                if let Ok(action) = self.mode.action_for(key) {
+                    self.handle_action(action, terminal)?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            AppEvent::Mouse(kind) => {
+                if let Some(action) = input::action_for_mouse(self.mode, kind) {
+                    self.handle_action(action, terminal)?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            AppEvent::Redraw => Ok(true),
+        }
     }
 
     fn handle_action(

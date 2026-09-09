@@ -3,7 +3,7 @@ use std::sync::{
     mpsc::{self, Receiver, Sender},
 };
 
-use crossterm::event::KeyEvent;
+use crossterm::event::{KeyEvent, MouseEventKind};
 
 static EVENT_SENDER: OnceLock<Mutex<Option<Sender<AppEvent>>>> = OnceLock::new();
 
@@ -11,6 +11,7 @@ static EVENT_SENDER: OnceLock<Mutex<Option<Sender<AppEvent>>>> = OnceLock::new()
 #[derive(Debug, Clone)]
 pub enum AppEvent {
     Key(KeyEvent),
+    Mouse(MouseEventKind),
     Redraw,
 }
 
@@ -56,12 +57,17 @@ pub fn send_key(key: KeyEvent) -> Result<(), mpsc::SendError<AppEvent>> {
     send(AppEvent::Key(key))
 }
 
+/// Send a mouse event through the global event channel.
+pub fn send_mouse(kind: MouseEventKind) -> Result<(), mpsc::SendError<AppEvent>> {
+    send(AppEvent::Mouse(kind))
+}
+
 /// Request that the UI redraw through the global event channel.
 pub fn send_redraw() -> Result<(), mpsc::SendError<AppEvent>> {
     send(AppEvent::Redraw)
 }
 
-fn send(event: AppEvent) -> Result<(), mpsc::SendError<AppEvent>> {
+pub fn send(event: AppEvent) -> Result<(), mpsc::SendError<AppEvent>> {
     if let Some(sender) = sender() {
         sender.send(event)
     } else {
