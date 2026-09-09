@@ -116,14 +116,18 @@ mod tests {
 
     #[test]
     fn escape_does_not_quit_diff_mode() {
-        assert!(Mode::Diff.action_for(KeyEvent::from(KeyCode::Esc)).is_err());
+        assert!(
+            Mode::Diff
+                .action_for_key(KeyEvent::from(KeyCode::Esc))
+                .is_err()
+        );
     }
 
     #[test]
     fn q_still_quits_diff_mode() {
         assert_eq!(
             Mode::Diff
-                .action_for(KeyEvent::from(KeyCode::Char('q')))
+                .action_for_key(KeyEvent::from(KeyCode::Char('q')))
                 .unwrap(),
             Action::Quit
         );
@@ -133,7 +137,7 @@ mod tests {
     fn escape_closes_file_selector() {
         assert_eq!(
             Mode::FileSelector
-                .action_for(KeyEvent::from(KeyCode::Esc))
+                .action_for_key(KeyEvent::from(KeyCode::Esc))
                 .unwrap(),
             Action::CloseFileSelector
         );
