@@ -35,7 +35,6 @@ impl Buffer {
             let offset = *offset;
             let offlen = *offlen;
             let color = *color;
-            tracing::trace!(?color, offset = ?offset, offlen = ?offlen, ?len, line = ?content, start = ?start, "coloring line");
 
             let cap = len.saturating_sub(offset);
 
@@ -68,9 +67,6 @@ impl Buffer {
 
             match event {
                 HighlightEvent::Source { start, end } => {
-                    let split = self.content[start..end].contains(&b'\n');
-                    tracing::trace!(?start, ?end, ?split, content = ?std::str::from_utf8(&self.content[start..end]), "found tree-sitter span");
-
                     let (line, _) = self.lines[self.colors.len() - 1];
                     let s = start - line;
                     let e = end - start;
@@ -110,8 +106,6 @@ impl Buffer {
                 }
             }
         }
-
-        tracing::debug!(color = ?self.colors, "loaded colors");
 
         Ok(())
     }

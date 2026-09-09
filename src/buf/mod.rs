@@ -80,7 +80,6 @@ impl Buffer {
             return Ok(Buffer::default());
         }
 
-        tracing::trace!(?oid, "finding blob");
         let blob = repo.find_blob(oid)?;
         let content = blob.content();
 

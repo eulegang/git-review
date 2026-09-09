@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, io, path::PathBuf};
+use std::{collections::BTreeSet, io};
 
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
@@ -6,11 +6,11 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use diff::{Diff, DiffState};
-use eyre::{Context, ContextCompat, Result};
+use eyre::{Context, Result};
 use file_selector::FileSelector;
 use ratatui::{Terminal, backend::CrosstermBackend, layout::Alignment, widgets::Paragraph};
 
-use action::{Action, Mode};
+use action::Mode;
 
 use crate::{
     eventing::{self, AppEvent},
@@ -19,7 +19,6 @@ use crate::{
 
 mod action;
 mod diff;
-mod edit;
 mod file_selector;
 mod input;
 pub mod theme;
@@ -38,11 +37,10 @@ pub struct App {
     center_line: bool,
     should_quit: bool,
     theme: Theme,
-    workdir: Option<PathBuf>,
 }
 
 impl App {
-    pub fn new(model: Delta, theme: Theme, workdir: Option<PathBuf>) -> Self {
+    pub fn new(model: Delta, theme: Theme) -> Self {
         let len = model.len();
 
         Self {
@@ -56,95 +54,6 @@ impl App {
             center_line: false,
             should_quit: false,
             theme,
-            workdir,
-        }
-    }
-
-    fn next_file(&mut self) {
-        if self.selected_file + 1 < self.model.len() {
-            self.selected_file += 1;
-            self.jump_to_selected_file();
-        }
-    }
-
-    fn previous_file(&mut self) {
-        if self.selected_file > 0 {
-            self.selected_file -= 1;
-            self.jump_to_selected_file();
-        }
-    }
-
-    fn next_selector_file(&mut self) {
-        if self.selector_file + 1 < self.model.len() {
-            self.selector_file += 1;
-        }
-    }
-
-    fn previous_selector_file(&mut self) {
-        self.selector_file = self.selector_file.saturating_sub(1);
-    }
-
-    fn scroll_down(&mut self, amount: u16) {
-        self.line += amount as usize;
-        self.line = self
-            .line
-            .min(self.current_file_line_count().saturating_sub(1))
-    }
-
-    fn scroll_up(&mut self, amount: u16) {
-        self.line = self.line.saturating_sub(amount as usize);
-    }
-
-    fn jump_to_next_hunk(&mut self) {
-        if let Some(entry) = self.model.get(self.selected_file) {
-            let mut first_line = 0;
-
-            for (index, hunk) in entry.hunks().enumerate() {
-                if self.hunk_is_hidden(index) {
-                    continue;
-                }
-
-                let line_count = hunk.critical();
-                if line_count == 0 {
-                    continue;
-                }
-
-                if first_line > self.line {
-                    self.line = first_line;
-                    return;
-                }
-
-                first_line += line_count;
-            }
-        }
-    }
-
-    fn jump_to_previous_hunk(&mut self) {
-        if let Some(entry) = self.model.get(self.selected_file) {
-            let mut first_line = 0;
-            let mut previous_hunk = None;
-
-            for (index, hunk) in entry.hunks().enumerate() {
-                if self.hunk_is_hidden(index) {
-                    continue;
-                }
-
-                let line_count = hunk.critical();
-                if line_count == 0 {
-                    continue;
-                }
-
-                if self.line <= first_line || self.line < first_line + line_count {
-                    break;
-                }
-
-                previous_hunk = Some(first_line);
-                first_line += line_count;
-            }
-
-            if let Some(line) = previous_hunk {
-                self.line = line;
-            }
         }
     }
 
@@ -196,64 +105,6 @@ impl App {
         None
     }
 
-    fn hide_current_hunk(&mut self) {
-        if let Some(hunk) = self.current_hunk() {
-            if let Some(hidden) = self.hidden_hunks.get_mut(self.selected_file) {
-                hidden.insert(hunk);
-            }
-            let last_line = self.current_file_line_count().saturating_sub(1);
-            self.line = self.line.min(last_line);
-            self.scroll = self.scroll.min(last_line);
-        }
-    }
-
-    fn show_hidden_hunks(&mut self) {
-        if let Some(hidden) = self.hidden_hunks.get_mut(self.selected_file) {
-            hidden.clear();
-        }
-    }
-
-    fn apply(&mut self, action: Action) {
-        match action {
-            Action::Quit => self.should_quit = true,
-            Action::ScrollDown(amount) => self.scroll_down(amount),
-            Action::ScrollUp(amount) => self.scroll_up(amount),
-            Action::JumpToNextHunk => self.jump_to_next_hunk(),
-            Action::JumpToPreviousHunk => self.jump_to_previous_hunk(),
-            Action::CenterSelectedLine => self.center_line = true,
-            Action::HideCurrentHunk => self.hide_current_hunk(),
-            Action::ShowHiddenHunks => self.show_hidden_hunks(),
-            Action::JumpToTop => {
-                self.line = 0;
-                self.scroll = 0;
-            }
-            Action::JumpToBottom => {
-                self.line = self.current_file_line_count().saturating_sub(1);
-            }
-            Action::NextFile => self.next_file(),
-            Action::PreviousFile => self.previous_file(),
-            Action::OpenFileSelector => {
-                self.selector_file = self.selected_file;
-                self.mode = Mode::FileSelector;
-            }
-            Action::EditFile => (),
-            Action::CloseFileSelector => self.mode = Mode::Diff,
-            Action::SelectNextFile => self.next_selector_file(),
-            Action::SelectPreviousFile => self.previous_selector_file(),
-            Action::SelectFirstFile => self.selector_file = 0,
-            Action::SelectLastFile => {
-                if !self.model.len() == 0 {
-                    self.selector_file = self.model.len() - 1;
-                }
-            }
-            Action::ConfirmFileSelection => {
-                self.selected_file = self.selector_file;
-                self.mode = Mode::Diff;
-                self.jump_to_selected_file();
-            }
-        }
-    }
-
     pub fn run(&mut self) -> Result<()> {
         enable_raw_mode().context("failed to enable raw terminal mode")?;
         let mut stdout = io::stdout();
@@ -285,11 +136,26 @@ impl App {
 
         while !self.should_quit {
             let app_event = events.receiver().recv().context("event channel closed")?;
-            let mut needs_redraw = self.handle_app_event(app_event, terminal)?;
-
-            while let Ok(app_event) = events.receiver().try_recv() {
-                needs_redraw |= self.handle_app_event(app_event, terminal)?;
-            }
+            tracing::debug!(?app_event, "Processing event");
+            let needs_redraw = match app_event {
+                AppEvent::Key(key) => {
+                    if let Ok(action) = self.mode.action_for_key(key) {
+                        self.execute(action);
+                        true
+                    } else {
+                        false
+                    }
+                }
+                AppEvent::Mouse(mouse) => {
+                    if let Ok(action) = self.mode.action_for_mouse(mouse) {
+                        self.execute(action);
+                        true
+                    } else {
+                        false
+                    }
+                }
+                AppEvent::Redraw => true,
+            };
 
             if needs_redraw {
                 terminal.draw(|frame| render(frame, self))?;
@@ -297,53 +163,6 @@ impl App {
         }
 
         input.close()?;
-
-        Ok(())
-    }
-
-    fn handle_app_event(
-        &mut self,
-        app_event: AppEvent,
-        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    ) -> Result<bool> {
-        match app_event {
-            AppEvent::Key(key) => {
-                if let Ok(action) = self.mode.action_for_key(key) {
-                    self.handle_action(action, terminal)?;
-                    Ok(true)
-                } else {
-                    Ok(false)
-                }
-            }
-            AppEvent::Mouse(mouse) => {
-                if let Ok(action) = self.mode.action_for_mouse(mouse) {
-                    self.handle_action(action, terminal)?;
-                    Ok(true)
-                } else {
-                    Ok(false)
-                }
-            }
-            AppEvent::Redraw => Ok(true),
-        }
-    }
-
-    fn handle_action(
-        &mut self,
-        action: Action,
-        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    ) -> Result<()> {
-        if action == Action::EditFile {
-            let path = self
-                .model
-                .get(self.selected_file)
-                .map(|entry| entry.path.as_path())
-                .context("no file selected")?;
-
-            let edit = edit::Edit::new(path, self.workdir.as_deref());
-            edit.run(terminal)?;
-        } else {
-            self.apply(action);
-        }
 
         Ok(())
     }

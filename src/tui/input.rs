@@ -1,6 +1,7 @@
 use std::{
+    mem::forget,
     sync::{
-        Arc,
+        Arc, Condvar, Mutex,
         atomic::{AtomicBool, Ordering},
     },
     thread::{self, JoinHandle},
@@ -15,33 +16,50 @@ use crate::eventing;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
-pub struct InputThread {
+struct State {
     should_stop: Arc<AtomicBool>,
+    paused: Arc<(Mutex<bool>, Condvar)>,
+}
+
+pub struct InputThread {
+    state: State,
     handle: Option<JoinHandle<()>>,
 }
 
 impl InputThread {
     pub fn spawn() -> Result<InputThread> {
         let should_stop = Arc::new(AtomicBool::new(false));
-        let thread_should_stop = Arc::clone(&should_stop);
+        let paused = Arc::new((Mutex::new(false), Condvar::new()));
+
+        let thread_state = State {
+            should_stop: Arc::clone(&should_stop),
+            paused: Arc::clone(&paused),
+        };
+
+        let state = State {
+            should_stop,
+            paused,
+        };
 
         let handle = thread::Builder::new()
             .name("input".to_owned())
             .spawn(move || {
-                if let Err(error) = InputThread::input_loop(thread_should_stop) {
+                if let Err(error) = InputThread::input_loop(thread_state) {
                     error!(?error, "input thread failed");
                 }
             })
             .context("failed to spawn input thread")?;
 
         Ok(InputThread {
-            should_stop,
+            state,
             handle: Some(handle),
         })
     }
 
-    fn input_loop(should_stop: Arc<AtomicBool>) -> Result<()> {
-        while !should_stop.load(Ordering::Relaxed) {
+    fn input_loop(state: State) -> Result<()> {
+        while !state.should_stop.load(Ordering::Relaxed) {
+            InputThread::check_paused(&state);
+
             if !event::poll(POLL_INTERVAL).context("failed to poll terminal events")? {
                 continue;
             }
@@ -63,8 +81,17 @@ impl InputThread {
         Ok(())
     }
 
+    fn check_paused(state: &State) {
+        let (lock, cond) = &*state.paused;
+
+        let mut paused = lock.lock().unwrap();
+        while *paused {
+            paused = cond.wait(paused).unwrap();
+        }
+    }
+
     pub fn close(mut self) -> eyre::Result<()> {
-        self.should_stop.store(true, Ordering::Relaxed);
+        self.state.should_stop.store(true, Ordering::Relaxed);
 
         if let Some(handle) = self.handle.take() {
             if handle.join().is_err() {
@@ -72,12 +99,14 @@ impl InputThread {
             };
         }
 
+        forget(self);
+
         Ok(())
     }
 }
 
 impl Drop for InputThread {
     fn drop(&mut self) {
-        self.should_stop.store(true, Ordering::Relaxed);
+        self.state.should_stop.store(true, Ordering::Relaxed);
     }
 }
