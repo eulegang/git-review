@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 
 const PAGE_SCROLL_LINES: u16 = 20;
 
@@ -10,10 +10,17 @@ pub enum Mode {
 }
 
 impl Mode {
-    pub fn action_for(self, event: KeyEvent) -> eyre::Result<Action> {
+    pub fn action_for_key(self, event: KeyEvent) -> eyre::Result<Action> {
         match self {
             Mode::Diff => diff_action(event),
             Mode::FileSelector => file_selector_action(event),
+        }
+    }
+
+    pub fn action_for_mouse(self, event: MouseEvent) -> eyre::Result<Action> {
+        match self {
+            Mode::Diff => diff_mouse_action(event),
+            Mode::FileSelector => file_selector_mouse_action(event),
         }
     }
 }
@@ -65,6 +72,14 @@ fn diff_action(event: KeyEvent) -> eyre::Result<Action> {
     }
 }
 
+fn diff_mouse_action(event: MouseEvent) -> eyre::Result<Action> {
+    match event.kind {
+        MouseEventKind::ScrollDown => Ok(Action::ScrollDown(3)),
+        MouseEventKind::ScrollUp => Ok(Action::ScrollUp(3)),
+        _ => Err(eyre::eyre!("invalid mouse action")),
+    }
+}
+
 fn file_selector_action(event: KeyEvent) -> eyre::Result<Action> {
     match event.code {
         KeyCode::Char('q') | KeyCode::Esc | KeyCode::Char('f') => Ok(Action::CloseFileSelector),
@@ -84,6 +99,14 @@ fn file_selector_action(event: KeyEvent) -> eyre::Result<Action> {
         KeyCode::Char('G') | KeyCode::End => Ok(Action::SelectLastFile),
         KeyCode::Enter => Ok(Action::ConfirmFileSelection),
         _ => Err(eyre::eyre!("invalid keycode")),
+    }
+}
+
+fn file_selector_mouse_action(event: MouseEvent) -> eyre::Result<Action> {
+    match event.kind {
+        MouseEventKind::ScrollDown => Ok(Action::SelectNextFile),
+        MouseEventKind::ScrollUp => Ok(Action::SelectPreviousFile),
+        _ => Err(eyre::eyre!("invalid mouse action")),
     }
 }
 

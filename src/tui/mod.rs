@@ -279,7 +279,7 @@ impl App {
 
     fn main_loop(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         let events = eventing::install();
-        let _input = input::spawn()?;
+        let input = input::InputThread::spawn()?;
 
         terminal.draw(|frame| render(frame, self))?;
 
@@ -296,6 +296,8 @@ impl App {
             }
         }
 
+        input.close()?;
+
         Ok(())
     }
 
@@ -306,15 +308,15 @@ impl App {
     ) -> Result<bool> {
         match app_event {
             AppEvent::Key(key) => {
-                if let Ok(action) = self.mode.action_for(key) {
+                if let Ok(action) = self.mode.action_for_key(key) {
                     self.handle_action(action, terminal)?;
                     Ok(true)
                 } else {
                     Ok(false)
                 }
             }
-            AppEvent::Mouse(kind) => {
-                if let Some(action) = input::action_for_mouse(self.mode, kind) {
+            AppEvent::Mouse(mouse) => {
+                if let Ok(action) = self.mode.action_for_mouse(mouse) {
                     self.handle_action(action, terminal)?;
                     Ok(true)
                 } else {
