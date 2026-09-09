@@ -98,12 +98,6 @@ mod test {
 
     #[test]
     fn basic_color() -> eyre::Result<()> {
-        tracing_subscriber::fmt()
-            .pretty()
-            .with_max_level(tracing::Level::TRACE)
-            .with_level(true)
-            .init();
-
         let repo = Repository::discover(".")?;
         let config = repo.config()?;
 
