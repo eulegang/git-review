@@ -3,7 +3,10 @@ use std::{collections::HashMap, path::Path};
 use tracing::error;
 use tree_sitter_highlight::{HighlightConfiguration, Highlighter};
 
-use crate::{model::Delta, syntax::theme::SyntaxTheme};
+use crate::{
+    model::{Delta, Entry},
+    syntax::theme::SyntaxTheme,
+};
 
 mod loader;
 mod matcher;
@@ -31,21 +34,27 @@ impl Syntax {
         }
     }
 
-    pub fn highlight(&mut self, delta: &mut Delta) {
+    pub fn highlight_entry(&mut self, entry: &mut Entry) {
+        if entry.old.is_colored() && entry.new.is_colored() {
+            return;
+        }
+
+        let Some(config) = self.find(&entry.path) else {
+            return;
+        };
+
         let mut highlighter = Highlighter::new();
 
-        for entry in &mut delta.entries {
-            let Some(config) = self.find(&entry.path) else {
-                continue;
-            };
+        if !entry.old.is_colored()
+            && let Err(err) = entry.old.color(&mut highlighter, &config, &self.theme)
+        {
+            tracing::error!(?err, "failed to highlight old file");
+        }
 
-            if let Err(err) = entry.old.color(&mut highlighter, &config, &self.theme) {
-                tracing::error!(?err, "failed to highlight old file");
-            }
-
-            if let Err(err) = entry.new.color(&mut highlighter, &config, &self.theme) {
-                tracing::error!(?err, "failed to highlight old file");
-            }
+        if !entry.new.is_colored()
+            && let Err(err) = entry.new.color(&mut highlighter, &config, &self.theme)
+        {
+            tracing::error!(?err, "failed to highlight new file");
         }
     }
 

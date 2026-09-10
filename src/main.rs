@@ -26,16 +26,14 @@ fn main() -> Result<()> {
     let repo = Repository::discover(".").context("not inside a Git repository")?;
     let config = repo.config().context("Loading git config")?;
 
-    let mut syntax = Syntax::new(&config);
+    let syntax = Syntax::new(&config);
     let theme = Theme::load(&config)?;
     let mode = cli.diff_mode()?;
-    let mut model = Delta::load(&repo, &mode)?;
-
-    syntax.highlight(&mut model);
+    let model = Delta::load(&repo, &mode)?;
 
     debug!("loaded model {:#?}", model);
 
-    let mut app = App::new(model, theme);
+    let mut app = App::new(model, syntax, theme);
 
     app.run()
 }

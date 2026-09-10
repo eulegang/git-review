@@ -86,6 +86,10 @@ impl Buffer {
         Buffer::buf(content.to_vec())
     }
 
+    pub fn is_colored(&self) -> bool {
+        !self.colors.is_empty()
+    }
+
     pub fn take(&mut self) -> Buffer {
         let content = std::mem::take(&mut self.content);
         let lines = std::mem::take(&mut self.lines);

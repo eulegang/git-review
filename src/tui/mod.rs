@@ -15,6 +15,7 @@ use action::Mode;
 use crate::{
     eventing::{self, AppEvent},
     model::Delta,
+    syntax::Syntax,
 };
 
 mod action;
@@ -28,6 +29,7 @@ pub use theme::Theme;
 #[derive(Debug)]
 pub struct App {
     model: Delta,
+    syntax: Syntax,
     selected_file: usize,
     selector_file: usize,
     mode: Mode,
@@ -40,11 +42,12 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(model: Delta, theme: Theme) -> Self {
+    pub fn new(model: Delta, syntax: Syntax, theme: Theme) -> Self {
         let len = model.len();
 
         Self {
             model,
+            syntax,
             selected_file: 0,
             selector_file: 0,
             mode: Mode::Diff,
@@ -60,6 +63,12 @@ impl App {
     fn jump_to_selected_file(&mut self) {
         self.line = 0;
         self.scroll = 0;
+    }
+
+    fn highlight_selected_file(&mut self) {
+        if let Some(entry) = self.model.entries.get_mut(self.selected_file) {
+            self.syntax.highlight_entry(entry);
+        }
     }
 
     fn current_file_line_count(&self) -> usize {
@@ -178,6 +187,8 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
         frame.render_widget(warning, area);
         return;
     }
+
+    app.highlight_selected_file();
 
     let hidden_hunks = app
         .hidden_hunks
