@@ -3,10 +3,7 @@ use std::{collections::HashMap, path::Path};
 use tracing::error;
 use tree_sitter_highlight::{HighlightConfiguration, Highlighter};
 
-use crate::{
-    model::Entry,
-    syntax::theme::SyntaxTheme,
-};
+use crate::{model::Entry, syntax::theme::SyntaxTheme};
 
 mod loader;
 mod matcher;
@@ -139,7 +136,8 @@ mod test {
         }
     }
 
-    fn mock_delta(buf: Vec<u8>) -> eyre::Result<Delta> {
+    #[cfg(test)]
+    fn mock_delta(buf: Vec<u8>) -> eyre::Result<crate::model::Delta> {
         let new = Buffer::buf(buf)?;
 
         let entry = Entry {
@@ -149,7 +147,7 @@ mod test {
             hunks: vec![],
         };
 
-        Ok(Delta {
+        Ok(crate::model::Delta {
             entries: vec![entry],
         })
     }

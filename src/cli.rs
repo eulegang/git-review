@@ -108,52 +108,34 @@ mod tests {
 
     #[test]
     fn defaults_to_working_tree_diff() {
-        let mode = Cli {
-            staged: false,
-            default_branch: false,
-            rev: None,
-        }
-        .diff_mode()
-        .unwrap();
+        let mode = Cli::parse_from(["git-review"]).diff_mode().unwrap();
 
         assert_eq!(mode, DiffMode::WorkingTree);
     }
 
     #[test]
     fn supports_staged_diff() {
-        let mode = Cli {
-            staged: true,
-            default_branch: false,
-            rev: None,
-        }
-        .diff_mode()
-        .unwrap();
+        let mode = Cli::parse_from(["git-review", "--staged"])
+            .diff_mode()
+            .unwrap();
 
         assert_eq!(mode, DiffMode::Staged);
     }
 
     #[test]
     fn supports_default_branch_diff() {
-        let mode = Cli {
-            staged: false,
-            default_branch: true,
-            rev: None,
-        }
-        .diff_mode()
-        .unwrap();
+        let mode = Cli::parse_from(["git-review", "--default-branch"])
+            .diff_mode()
+            .unwrap();
 
         assert_eq!(mode, DiffMode::DefaultBranch);
     }
 
     #[test]
     fn supports_revision_diff() {
-        let mode = Cli {
-            staged: false,
-            default_branch: false,
-            rev: Some("main..feature".parse().unwrap()),
-        }
-        .diff_mode()
-        .unwrap();
+        let mode = Cli::parse_from(["git-review", "main..feature"])
+            .diff_mode()
+            .unwrap();
 
         assert_eq!(
             mode,
@@ -170,15 +152,9 @@ mod tests {
 
     #[test]
     fn rejects_staged_with_revision() {
-        let error = Cli {
-            staged: true,
-            default_branch: false,
-            rev: Some("HEAD~1".parse().unwrap()),
-        }
-        .diff_mode()
-        .unwrap_err();
+        let error = Cli::try_parse_from(["git-review", "--staged", "HEAD~1"]).unwrap_err();
 
-        assert!(error.to_string().contains("--staged cannot be combined"));
+        assert!(error.to_string().contains("--staged"));
     }
 
     #[test]
