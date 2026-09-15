@@ -4,7 +4,7 @@ use tracing::error;
 use tree_sitter_highlight::{HighlightConfiguration, Highlighter};
 
 use crate::{
-    model::{Delta, Entry},
+    model::Entry,
     syntax::theme::SyntaxTheme,
 };
 
@@ -113,7 +113,7 @@ mod test {
         let mut syntax = Syntax::new(&config);
         let mut delta = mock_delta(b"fn main() {\n  println!(\"hello world\");\n}\n".to_vec())?;
 
-        syntax.highlight(&mut delta);
+        syntax.highlight_entry(&mut delta.entries[0]);
 
         let buf = delta.entries[0].new.clone();
 

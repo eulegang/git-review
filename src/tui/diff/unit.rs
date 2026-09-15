@@ -268,7 +268,7 @@ fn syntax_highlights_rust_diff_lines() {
         "@@ -1 +1 @@",
         vec![(LineStatus::Add, "fn main() {}".to_string())],
     )]);
-    syntax.highlight(&mut delta);
+    syntax.highlight_entry(&mut delta.entries[0]);
 
     let buf = render_stateful(
         widget(&delta, &[], &theme),
