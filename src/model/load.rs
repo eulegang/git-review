@@ -12,20 +12,35 @@ impl Delta {
             .recurse_untracked_dirs(true);
 
         let diff = match mode {
-            DiffMode::WorkingTree => repo
-                .diff_index_to_workdir(None, Some(&mut options))
-                .context("failed to diff index against working tree")?,
+            DiffMode::WorkingTree => {
+                tracing::info!("diffing with work tree");
+
+                repo.diff_index_to_workdir(None, Some(&mut options))
+                    .context("failed to diff index against working tree")?
+            }
+
             DiffMode::Staged => {
+                tracing::info!("diffing with staged");
+
                 let head_tree = repo.head().ok().and_then(|head| head.peel_to_tree().ok());
                 repo.diff_tree_to_index(head_tree.as_ref(), None, Some(&mut options))
                     .context("failed to diff HEAD against index")?
             }
+
             DiffMode::DefaultBranch => {
                 let default_branch = detect_default_branch(&repo)?;
-                let rev = Revision::Commitish(default_branch);
+                let rev = Revision::Range(default_branch, "HEAD".to_string());
+
+                tracing::info!("diffing revision {rev}");
+
                 diff_revision(&repo, &rev, &mut options)?
             }
-            DiffMode::Revision(rev) => diff_revision(&repo, rev, &mut options)?,
+
+            DiffMode::Revision(rev) => {
+                tracing::info!("diffing revision {rev}");
+
+                diff_revision(&repo, rev, &mut options)?
+            }
         };
 
         Delta::calc(repo, diff)

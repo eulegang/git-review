@@ -6,7 +6,6 @@ use ratatui::{
     text::{Span, Text},
     widgets::{StatefulWidget, Widget},
 };
-use tracing::debug;
 
 use crate::{
     model::{Delta, HunkLine, LineStatus},
@@ -145,7 +144,7 @@ impl<'a> StatefulWidget for Diff<'a> {
         buf: &mut ratatui::prelude::Buffer,
         state: &mut Self::State,
     ) {
-        debug!("rendering diff");
+        tracing::trace!("rendering diff");
 
         let Some(entry) = self.delta.get(self.selected_entry) else {
             return;

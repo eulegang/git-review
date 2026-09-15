@@ -43,7 +43,7 @@ impl Loader {
     }
 
     fn load_language(&self, lang: &str) -> eyre::Result<(Language, Library)> {
-        tracing::debug!(?lang, dirs = ?self.paths, "trying to load tree-sitter extension");
+        tracing::trace!(?lang, dirs = ?self.paths, "trying to load tree-sitter extension");
         for dir in &self.paths {
             for ext in ["so", "dylib", "dll"] {
                 let name = format!("{lang}.{ext}");
@@ -75,7 +75,7 @@ impl Loader {
     }
 
     fn load_queries(&self, lang: &str) -> (Option<String>, Option<String>, Option<String>) {
-        tracing::debug!(?lang, dirs = ?self.paths, "trying to load tree-sitter queries");
+        tracing::trace!(?lang, dirs = ?self.paths, "trying to load tree-sitter queries");
 
         for dir in &self.paths {
             let base = dir.join(lang);
@@ -85,7 +85,7 @@ impl Loader {
                 let injections = read_content(&base.join("injections.scm"));
                 let locals = read_content(&base.join("locals.scm"));
 
-                tracing::debug!(?lang, highlight = ?highlight.is_some(), injections = ?injections.is_some(), locals = ?locals.is_some(), "loaded queries");
+                tracing::trace!(?lang, highlight = ?highlight.is_some(), injections = ?injections.is_some(), locals = ?locals.is_some(), "loaded queries");
 
                 return (highlight, injections, locals);
             }

@@ -40,8 +40,6 @@ impl SyntaxTheme {
             colors.push(color);
         });
 
-        tracing::debug!(?names, ?colors, "loaded syntax theme");
-
         SyntaxTheme { names, colors }
     }
 

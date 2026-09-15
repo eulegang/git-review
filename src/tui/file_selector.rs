@@ -2,7 +2,6 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, StatefulWidget, Widget},
 };
-use tracing::debug;
 
 use crate::{model::Delta, tui::Theme};
 
@@ -15,7 +14,7 @@ impl StatefulWidget for FileSelector<'_> {
     type State = usize;
 
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer, state: &mut Self::State) {
-        debug!("rendering file selector");
+        tracing::trace!("rendering file selector");
         let area = centered_rect(70, 70, area);
         Clear.render(area, buf);
 

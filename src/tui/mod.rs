@@ -145,7 +145,7 @@ impl App {
 
         while !self.should_quit {
             let app_event = events.receiver().recv().context("event channel closed")?;
-            tracing::debug!(?app_event, "Processing event");
+            tracing::trace!(?app_event, "Processing event");
             let needs_redraw = match app_event {
                 AppEvent::Key(key) => {
                     if let Ok(action) = self.mode.action_for_key(key) {
