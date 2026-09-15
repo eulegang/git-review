@@ -11,11 +11,11 @@ use eyre::{Result, bail};
 )]
 pub struct Cli {
     /// Show staged changes instead of working tree changes.
-    #[arg(long, conflicts_with_all = ["default_branch", "rev"])]
+    #[arg(long, short = 's', conflicts_with_all = ["default_branch", "rev"])]
     staged: bool,
 
     /// Diff against the repository's default branch.
-    #[arg(long, conflicts_with = "rev")]
+    #[arg(long, short = 'd', conflicts_with = "rev")]
     default_branch: bool,
 
     /// Optional Git revision or range to diff, e.g. HEAD~1 or main..feature.
