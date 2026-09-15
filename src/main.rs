@@ -29,6 +29,7 @@ fn main() -> Result<()> {
     let syntax = Syntax::new(&config);
     let theme = Theme::load(&config)?;
     let mode = cli.diff_mode()?;
+    tracing::info!("running with diff mode {mode:?}");
     let model = Delta::load(&repo, &mode)?;
 
     debug!("loaded model {:#?}", model);
