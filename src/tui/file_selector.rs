@@ -1,12 +1,14 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Style},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
-use crate::{model::Delta, tui::Theme};
+use crate::{filter::Filter, model::Delta, tui::Theme};
 
 pub struct FileSelector<'a> {
     pub delta: &'a Delta,
+    pub file_filter: &'a Filter,
     pub theme: &'a Theme,
 }
 
@@ -21,7 +23,14 @@ impl StatefulWidget for FileSelector<'_> {
         let files: Vec<ListItem> = self
             .delta
             .entries()
-            .map(|entry| ListItem::new(entry.path.display().to_string()))
+            .map(|entry| {
+                let item = ListItem::new(entry.path.display().to_string());
+                if self.file_filter.accepts(&entry.path) {
+                    item
+                } else {
+                    item.style(Style::new().fg(Color::DarkGray))
+                }
+            })
             .collect();
         let selector = List::new(files)
             .block(

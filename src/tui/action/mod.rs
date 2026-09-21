@@ -1,5 +1,5 @@
 use crate::tui::App;
-use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
 mod file;
 mod hunk;
@@ -16,6 +16,7 @@ const PAGE_SCROLL_LINES: u16 = 20;
 pub enum Mode {
     Diff,
     FileSelector,
+    TextInput,
 }
 
 pub trait Action {
@@ -44,6 +45,13 @@ pub enum Intent {
     SelectFirstFile,
     SelectLastFile,
     ConfirmFileSelection,
+    OpenTextInput,
+    CloseTextInput,
+    ConfirmTextInput,
+    InputChar(char),
+    CycleInputMode,
+    InvertInputMode,
+    BackspaceInput,
 }
 
 impl App {
@@ -73,6 +81,14 @@ impl App {
             Intent::SelectFirstFile => selector::FirstFile.perform(self),
             Intent::SelectLastFile => selector::LastFile.perform(self),
             Intent::ConfirmFileSelection => selector::Confirm.perform(self),
+
+            Intent::OpenTextInput => misc::OpenTextInput.perform(self),
+            Intent::CloseTextInput => misc::CloseTextInput.perform(self),
+            Intent::ConfirmTextInput => misc::ConfirmTextInput.perform(self),
+            Intent::InputChar(ch) => misc::InputChar(ch).perform(self),
+            Intent::CycleInputMode => misc::CycleInput.perform(self),
+            Intent::InvertInputMode => misc::InvertInput.perform(self),
+            Intent::BackspaceInput => misc::BackspaceInput.perform(self),
         }
     }
 }
@@ -82,6 +98,7 @@ impl Mode {
         match self {
             Mode::Diff => diff_action(event),
             Mode::FileSelector => file_selector_action(event),
+            Mode::TextInput => text_input_action(event),
         }
     }
 
@@ -89,6 +106,7 @@ impl Mode {
         match self {
             Mode::Diff => diff_mouse_action(event),
             Mode::FileSelector => file_selector_mouse_action(event),
+            Mode::TextInput => Err(eyre::eyre!("invalid mouse action")),
         }
     }
 }
@@ -109,6 +127,7 @@ fn diff_action(event: KeyEvent) -> eyre::Result<Intent> {
         KeyCode::Char('n') | KeyCode::Tab => Ok(Intent::NextFile),
         KeyCode::Char('p') | KeyCode::BackTab => Ok(Intent::PreviousFile),
         KeyCode::Char('f') => Ok(Intent::OpenFileSelector),
+        KeyCode::Char('F') => Ok(Intent::OpenTextInput),
         _ => Err(eyre::eyre!("invalid keycode")),
     }
 }
@@ -139,6 +158,30 @@ fn file_selector_action(event: KeyEvent) -> eyre::Result<Intent> {
         KeyCode::Char('g') | KeyCode::Home => Ok(Intent::SelectFirstFile),
         KeyCode::Char('G') | KeyCode::End => Ok(Intent::SelectLastFile),
         KeyCode::Enter => Ok(Intent::ConfirmFileSelection),
+        _ => Err(eyre::eyre!("invalid keycode")),
+    }
+}
+
+fn text_input_action(event: KeyEvent) -> eyre::Result<Intent> {
+    match event.code {
+        KeyCode::Esc => Ok(Intent::CloseTextInput),
+        KeyCode::Enter => Ok(Intent::ConfirmTextInput),
+        KeyCode::Backspace => Ok(Intent::BackspaceInput),
+        KeyCode::BackTab => Ok(Intent::InvertInputMode),
+        KeyCode::Tab => {
+            if event.modifiers.contains(KeyModifiers::SHIFT) {
+                Ok(Intent::InvertInputMode)
+            } else {
+                Ok(Intent::CycleInputMode)
+            }
+        }
+        KeyCode::Char(ch)
+            if !event
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+        {
+            Ok(Intent::InputChar(ch))
+        }
         _ => Err(eyre::eyre!("invalid keycode")),
     }
 }
@@ -181,6 +224,16 @@ mod tests {
                 .action_for_key(KeyEvent::from(KeyCode::Esc))
                 .unwrap(),
             Intent::CloseFileSelector
+        );
+    }
+
+    #[test]
+    fn enter_confirms_text_input() {
+        assert_eq!(
+            Mode::TextInput
+                .action_for_key(KeyEvent::from(KeyCode::Enter))
+                .unwrap(),
+            Intent::ConfirmTextInput
         );
     }
 }

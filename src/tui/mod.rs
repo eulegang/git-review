@@ -8,20 +8,30 @@ use crossterm::{
 use diff::{Diff, DiffState};
 use eyre::{Context, Result};
 use file_selector::FileSelector;
-use ratatui::{Terminal, backend::CrosstermBackend, layout::Alignment, widgets::Paragraph};
+use filter_preview::FilterPreview;
+use ratatui::{
+    Terminal,
+    backend::CrosstermBackend,
+    layout::{Alignment, Position},
+    widgets::{Paragraph, Widget},
+};
+use text_input::TextInput;
 
 use action::Mode;
 
 use crate::{
     eventing::{self, AppEvent},
-    model::Delta,
+    filter::{Filter, FilterType},
+    model::{Delta, Entry},
     syntax::Syntax,
 };
 
 mod action;
 mod diff;
 mod file_selector;
+mod filter_preview;
 mod input;
+mod text_input;
 pub mod theme;
 
 pub use theme::Theme;
@@ -33,6 +43,10 @@ pub struct App {
     selected_file: usize,
     selector_file: usize,
     mode: Mode,
+    input_text: String,
+    file_filter_type: FilterType,
+    file_filter: Filter,
+    invert: bool,
     line: usize,
     scroll: usize,
     hidden_hunks: Vec<BTreeSet<usize>>,
@@ -51,6 +65,10 @@ impl App {
             selected_file: 0,
             selector_file: 0,
             mode: Mode::Diff,
+            input_text: String::new(),
+            file_filter_type: FilterType::default(),
+            file_filter: Filter::default(),
+            invert: false,
             line: 0,
             scroll: 0,
             hidden_hunks: vec![BTreeSet::new(); len],
@@ -65,8 +83,12 @@ impl App {
         self.scroll = 0;
     }
 
+    fn entry_matches_file_filter(&self, entry: &Entry) -> bool {
+        self.file_filter.accepts(&entry.path)
+    }
+
     fn highlight_selected_file(&mut self) {
-        if let Some(entry) = self.model.entries.get_mut(self.selected_file) {
+        if let Some(entry) = self.model.get_mut(self.selected_file) {
             self.syntax.highlight_entry(entry);
         }
     }
@@ -219,9 +241,98 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
     if app.mode == Mode::FileSelector {
         let selector = FileSelector {
             delta: &app.model,
+            file_filter: &app.file_filter,
             theme: &app.theme,
         };
         frame.render_stateful_widget(selector, area, &mut app.selector_file);
+    }
+
+    if app.mode == Mode::TextInput {
+        // Preview the draft filter without changing the committed filter or selection.
+        let preview = Filter::try_from((app.file_filter_type, app.input_text.clone(), app.invert));
+        let preview = FilterPreview {
+            delta: &app.model,
+            filter: preview.as_ref().ok(),
+        };
+        frame.render_widget(preview, area);
+
+        let input = TextInput {
+            text: &app.input_text,
+            filter_type: &app.file_filter_type,
+            invert: app.invert,
+            theme: &app.theme,
+        };
+        input.render(area, frame.buffer_mut());
+
+        let input_area = text_input::input_rect(area);
+        let cursor_x = input_area.x
+            + 1
+            + app
+                .input_text
+                .chars()
+                .count()
+                .min(input_area.width.saturating_sub(2) as usize) as u16;
+        frame.set_cursor_position(Position::new(cursor_x, input_area.y + 1));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use action::Intent;
+    use ratatui::{backend::TestBackend, style::Color};
+
+    #[test]
+    fn input_previews_filter_without_committing_it() {
+        let mut model = Delta::from_test_hunks(vec![]);
+        model.entries[0].path = "alpha.rs".into();
+        let mut other = Delta::from_test_hunks(vec![]).entries.remove(0);
+        other.path = "beta.rs".into();
+        model.entries.push(other);
+
+        let mut app = App::new(
+            model,
+            Syntax::new(&git2::Config::new().unwrap()),
+            Theme::default(),
+        );
+        app.execute(Intent::OpenTextInput);
+        for ch in "*beta*".chars() {
+            app.execute(Intent::InputChar(ch));
+        }
+
+        let mut terminal = Terminal::new(TestBackend::new(100, 38)).unwrap();
+        terminal.draw(|frame| render(frame, &mut app)).unwrap();
+        let buf = terminal.backend().buffer();
+        let row = |y| (0..100).map(|x| buf[(x, y)].symbol()).collect::<String>();
+        assert!(row(7).contains("alpha.rs"));
+        assert!(row(8).contains("beta.rs"));
+        let alpha_x = row(7).find("alpha.rs").unwrap() as u16;
+        assert_eq!(buf[(alpha_x, 7)].fg, Color::DarkGray);
+        assert!(row(3).contains("*beta*"));
+        assert_eq!(app.file_filter.repr(), "");
+        assert_eq!(app.selected_file, 0);
+
+        app.execute(Intent::CloseTextInput);
+        assert_eq!(app.file_filter.repr(), "");
+    }
+
+    #[test]
+    fn invalid_input_still_renders_preview() {
+        let model = Delta::from_test_hunks(vec![]);
+        let mut app = App::new(
+            model,
+            Syntax::new(&git2::Config::new().unwrap()),
+            Theme::default(),
+        );
+        app.execute(Intent::OpenTextInput);
+        app.execute(Intent::CycleInputMode);
+        app.execute(Intent::InputChar('['));
+        let mut terminal = Terminal::new(TestBackend::new(100, 38)).unwrap();
+        terminal.draw(|frame| render(frame, &mut app)).unwrap();
+        let buf = terminal.backend().buffer();
+        let text = (0..100).map(|x| buf[(x, 6)].symbol()).collect::<String>();
+        assert!(text.contains("Invalid filter"));
+        assert_eq!(app.file_filter.repr(), "");
     }
 }
 
