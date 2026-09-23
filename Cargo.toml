@@ -1,7 +1,16 @@
 [package]
-name = "git-review"
+name = "gr-git-review"
 version = "0.1.0"
 edition = "2024"
+
+description = "A tui for reviewing git changes"
+license = "MIT"
+
+repository = "https://github.com/eulegang/git-review"
+
+[[bin]]
+name = "git-review"
+path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4.5.23", features = ["derive"] }
