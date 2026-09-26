@@ -208,12 +208,6 @@ impl<'a> StatefulWidget for Diff<'a> {
                             style,
                         );
                         text.push_line(line.highlight());
-                        // if let Some(syntax) = syntax.as_mut() {
-                        //     text.push_line(line.highlight());
-                        // } else {
-                        //     let content = line.content().to_string();
-                        //     text.push_line(Span::styled(content, style));
-                        // }
                         j += 1;
                     }
 

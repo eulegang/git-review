@@ -1,14 +1,15 @@
 use std::{collections::HashMap, path::Path};
 
-use tracing::error;
 use tree_sitter_highlight::{HighlightConfiguration, Highlighter};
 
-use crate::{model::Entry, syntax::theme::SyntaxTheme};
+use crate::model::Entry;
 
+pub mod builder;
 mod loader;
 mod matcher;
 pub mod theme;
 
+#[derive(Default)]
 pub struct Syntax {
     loader: loader::Loader,
     matcher: matcher::Matcher,
@@ -16,21 +17,66 @@ pub struct Syntax {
     cache: HashMap<String, loader::SynExt>,
 }
 
-impl Syntax {
-    pub fn new(config: &git2::Config) -> Syntax {
-        let loader = loader::Loader::default();
-        let matcher = matcher::Matcher::default();
-        let cache = HashMap::default();
-        let theme = SyntaxTheme::new(config);
+#[cfg(test)]
+impl crate::TestFixture for Syntax {
+    fn fixture() -> Self {
+        use dirs::home_dir;
 
-        Syntax {
-            loader,
-            matcher,
-            theme,
-            cache,
+        let mut builder = builder::Builder::default();
+
+        let mut path = home_dir().unwrap();
+        path.push(".config");
+        path.push("git-review");
+
+        builder.add_path(path);
+        builder.add_lang("rs".to_string(), "rust".to_string());
+
+        let color = ratatui::style::Color::Black;
+
+        for name in [
+            "constructor",
+            "constant",
+            "float",
+            "number",
+            "attribute",
+            "error",
+            "exception",
+            "funtion",
+            "include",
+            "label",
+            "operator",
+            "parameter",
+            "punctuation.deliminator",
+            "punctuation.bracket",
+            "punctuation.special",
+            "symbol",
+            "type",
+            "tag",
+            "text",
+            "variable",
+            "boolean",
+            "constant",
+            "comment",
+            "conditional",
+            "function",
+            "method",
+            "function",
+            "namespace",
+            "field",
+            "property",
+            "keyword",
+            "repeat",
+            "string",
+            "character",
+        ] {
+            builder.add_color(name.to_string(), color);
         }
-    }
 
+        builder.build()
+    }
+}
+
+impl Syntax {
     pub fn highlight_entry(&mut self, entry: &mut Entry) {
         if entry.old.is_colored() && entry.new.is_colored() {
             return;
@@ -67,7 +113,7 @@ impl Syntax {
             let ext = match self.loader.load(lang) {
                 Ok(lang) => lang,
                 Err(err) => {
-                    error!(?err, "failed to load language {lang}");
+                    tracing::error!(?err, "failed to load language {lang}");
                     return None;
                 }
             };
@@ -93,21 +139,15 @@ impl std::fmt::Debug for Syntax {
 
 #[cfg(test)]
 mod test {
-    use std::path::PathBuf;
-
-    use git2::Repository;
-    use ratatui::text::Line;
-
-    use crate::{buf::Buffer, model::Entry};
-
     use super::*;
+
+    use crate::{TestFixture, buf::Buffer, model::Entry};
+    use ratatui::text::Line;
+    use std::path::PathBuf;
 
     #[test]
     fn basic_color() -> eyre::Result<()> {
-        let repo = Repository::discover(".")?;
-        let config = repo.config()?;
-
-        let mut syntax = Syntax::new(&config);
+        let mut syntax = Syntax::fixture();
         let mut delta = mock_delta(b"fn main() {\n  println!(\"hello world\");\n}\n".to_vec())?;
 
         syntax.highlight_entry(&mut delta.entries[0]);

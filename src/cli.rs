@@ -1,4 +1,4 @@
-use std::{fmt, str::FromStr};
+use std::{fmt, path::PathBuf, str::FromStr};
 
 use clap::Parser;
 use eyre::{Result, bail};
@@ -21,6 +21,14 @@ pub struct Cli {
     /// Optional Git revision or range to diff, e.g. HEAD~1 or main..feature.
     #[arg(value_name = "REV_OR_RANGE")]
     rev: Option<Revision>,
+
+    /// Path to a Lua configuration file.
+    #[arg(long, value_name = "PATH", conflicts_with = "no_config")]
+    config: Option<PathBuf>,
+
+    /// Disable loading the Lua configuration file.
+    #[arg(long)]
+    no_config: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,8 +95,20 @@ impl Cli {
         Self::parse()
     }
 
-    pub fn diff_mode(self) -> Result<DiffMode> {
-        match (self.staged, self.default_branch, self.rev) {
+    pub fn config_path(&self) -> Option<PathBuf> {
+        if self.no_config {
+            return None;
+        }
+
+        if let Some(path) = &self.config {
+            return Some(path.clone());
+        }
+
+        default_config_path()
+    }
+
+    pub fn diff_mode(&self) -> Result<DiffMode> {
+        match (self.staged, self.default_branch, self.rev.clone()) {
             (false, false, None) => Ok(DiffMode::WorkingTree),
             (true, false, None) => Ok(DiffMode::Staged),
             (false, true, None) => Ok(DiffMode::DefaultBranch),
@@ -100,6 +120,28 @@ impl Cli {
             (true, true, None) => bail!("--staged cannot be combined with --default-branch"),
         }
     }
+}
+
+fn default_config_path() -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+
+    if let Some(config_home) = std::env::var_os("XDG_CONFIG_HOME") {
+        candidates.push(
+            PathBuf::from(config_home)
+                .join("git-review")
+                .join("init.lua"),
+        );
+    }
+
+    if let Some(home) = dirs::home_dir() {
+        candidates.push(home.join(".config").join("git-review").join("init.lua"));
+    }
+
+    if let Some(config_dir) = dirs::config_dir() {
+        candidates.push(config_dir.join("git-review").join("init.lua"));
+    }
+
+    candidates.into_iter().find(|path| path.is_file())
 }
 
 #[cfg(test)]
@@ -148,6 +190,21 @@ mod tests {
         assert!(Cli::try_parse_from(["git-review", "--staged", "HEAD~1"]).is_err());
         assert!(Cli::try_parse_from(["git-review", "--default-branch", "HEAD~1"]).is_err());
         assert!(Cli::try_parse_from(["git-review", "--staged", "--default-branch"]).is_err());
+    }
+
+    #[test]
+    fn supports_config_path() {
+        let cli = Cli::parse_from(["git-review", "--config", "custom.lua"]);
+
+        assert_eq!(cli.config_path(), Some(PathBuf::from("custom.lua")));
+        assert!(!cli.no_config());
+    }
+
+    #[test]
+    fn rejects_conflicting_config_flags() {
+        assert!(
+            Cli::try_parse_from(["git-review", "--config", "custom.lua", "--no-config"]).is_err()
+        );
     }
 
     #[test]

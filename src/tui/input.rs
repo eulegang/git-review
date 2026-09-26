@@ -10,7 +10,6 @@ use std::{
 
 use crossterm::event::{self, Event, KeyEventKind};
 use eyre::{Context, Result};
-use tracing::error;
 
 use crate::eventing;
 
@@ -45,7 +44,7 @@ impl InputThread {
             .name("input".to_owned())
             .spawn(move || {
                 if let Err(error) = InputThread::input_loop(thread_state) {
-                    error!(?error, "input thread failed");
+                    tracing::error!(?error, "input thread failed");
                 }
             })
             .context("failed to spawn input thread")?;

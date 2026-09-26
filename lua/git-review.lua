@@ -1,0 +1,153 @@
+---@meta git-review.config
+
+-- LuaCATS definitions for git-review Lua configuration files.
+--
+-- Usage in ~/.config/git-review/init.lua:
+--
+--   ---@type GitReview.Config
+--   return {
+--     theme = { added_bg = "#203020" },
+--     keys = { diff = { ["<C-d>"] = { "scroll_down", 10 } } },
+--   }
+--
+-- This file is for editors/Lua language servers only. git-review evaluates the
+-- config file directly and does not provide `require` at runtime.
+
+---@alias GitReview.Color
+---| "reset"
+---| "default"
+---| "black"
+---| "red"
+---| "green"
+---| "yellow"
+---| "blue"
+---| "magenta"
+---| "cyan"
+---| "gray"
+---| "grey"
+---| "dark-gray"
+---| "dark-grey"
+---| "light-red"
+---| "light-green"
+---| "light-yellow"
+---| "light-blue"
+---| "light-magenta"
+---| "light-cyan"
+---| "white"
+---| integer # 0-255 indexed color.
+---| string  # Also accepts "#rrggbb" hex colors.
+
+---@class GitReview.Style
+---@field fg? GitReview.Color
+---@field foreground? GitReview.Color Alias for `fg`.
+---@field bg? GitReview.Color
+---@field background? GitReview.Color Alias for `bg`.
+
+---@class GitReview.Theme
+---@field added_bg? GitReview.Color
+---@field removed_bg? GitReview.Color
+---@field selected_added_fg? GitReview.Color
+---@field selected_removed_fg? GitReview.Color
+---@field selected_added_bg? GitReview.Color
+---@field selected_removed_bg? GitReview.Color
+---@field binary_bg? GitReview.Color
+---@field selector_highlight_fg? GitReview.Color
+---@field selector_highlight_bg? GitReview.Color
+---@field selector_highlight? GitReview.Style
+---@field hunk_header_fg? GitReview.Color
+---@field hunk_header_bg? GitReview.Color
+---@field hunk_header? GitReview.Style
+---@field warning_fg? GitReview.Color
+---@field warning_bg? GitReview.Color
+---@field warning? GitReview.Style
+
+---@class GitReview.Syntax
+---@field tree_sitter_paths? string|string[] Tree-sitter library/query search paths. Relative paths resolve from the config file directory.
+---@field paths? string|string[] Alias for `tree_sitter_paths`.
+---@field highlights? table<string, GitReview.Color> Tree-sitter capture colors. `@` prefixes are optional and `-` becomes `.`.
+---@field highlight? table<string, GitReview.Color> Alias for `highlights`.
+
+-- Single character, e.g. "j" or "G", or angle key, e.g. "<C-d>", "<enter>", "<S-tab>".
+---@alias GitReview.Key string
+
+---@alias GitReview.ActionName
+---| "quit"
+---| "scroll_down"
+---| "down"
+---| "scroll_up"
+---| "up"
+---| "page_down"
+---| "pagedown"
+---| "page_up"
+---| "pageup"
+---| "jump_to_top"
+---| "top"
+---| "jump_to_bottom"
+---| "bottom"
+---| "jump_to_next_hunk"
+---| "next_hunk"
+---| "jump_to_previous_hunk"
+---| "previous_hunk"
+---| "prev_hunk"
+---| "center_selected_line"
+---| "center_line"
+---| "hide_current_hunk"
+---| "hide_hunk"
+---| "show_hidden_hunks"
+---| "show_hunks"
+---| "unhide_hunks"
+---| "next_file"
+---| "previous_file"
+---| "prev_file"
+---| "open_file_selector"
+---| "close_file_selector"
+---| "select_next_file"
+---| "select_previous_file"
+---| "select_prev_file"
+---| "select_first_file"
+---| "select_last_file"
+---| "confirm_file_selection"
+---| "open_text_input"
+---| "close_text_input"
+---| "confirm_text_input"
+---| "cycle_input_mode"
+---| "cycle_input"
+---| "invert_input_mode"
+---| "invert_input"
+---| "backspace_input"
+---| "backspace"
+
+-- Tuple form: `{ "scroll_down", 10 }`.
+---@alias GitReview.ActionTuple table<integer, GitReview.ActionName|integer>
+
+---@class GitReview.ActionTable
+---@field action? GitReview.ActionName Action name when using object form.
+---@field name? GitReview.ActionName Alias for `action`.
+---@field amount? integer Amount for scroll/page actions.
+---@field lines? integer Alias for `amount`.
+
+---@alias GitReview.Action GitReview.ActionName|GitReview.ActionTuple|GitReview.ActionTable|false
+
+---@alias GitReview.ModeKeymap table<GitReview.Key, GitReview.Action>
+
+---@class GitReview.Keys
+---@field diff? GitReview.ModeKeymap
+---@field file_selector? GitReview.ModeKeymap
+---@field text_input? GitReview.ModeKeymap
+
+---@class GitReview.Config
+---@field theme? GitReview.Theme
+---@field syntax? GitReview.Syntax
+---@field tree_sitter? GitReview.Syntax Alias for `syntax`.
+---@field keys? GitReview.Keys
+---@field keybindings? GitReview.Keys Alias for `keys`.
+---@field key_bindings? GitReview.Keys Alias for `keys`.
+
+-- Runtime parser notes:
+-- - Most config field names accept either snake_case or kebab-case.
+-- - Action names are case-insensitive and may use `_`, `-`, or spaces.
+-- - Set a keybinding to `false` to remove the default binding.
+-- - Key modifiers: C/Ctrl/Control, A/Alt/M/Meta, S/Shift.
+-- - Named keys include: backspace, enter, left, right, up, down, home,
+--   end, pageup, pagedown, tab, backtab, delete, insert, null, esc,
+--   space, and f1..f255.

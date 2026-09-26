@@ -6,6 +6,10 @@ pub struct Matcher {
 }
 
 impl Matcher {
+    pub fn new(map: HashMap<String, String>) -> Matcher {
+        Matcher { map }
+    }
+
     pub fn matches(&self, path: &Path) -> Option<&str> {
         let Some(ext) = path.extension() else {
             return None;

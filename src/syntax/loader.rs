@@ -21,12 +21,16 @@ pub struct SynExt {
     library: Library,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Loader {
     paths: Vec<PathBuf>,
 }
 
 impl Loader {
+    pub fn new(paths: Vec<PathBuf>) -> Loader {
+        Loader { paths }
+    }
+
     pub fn load(&self, lang: &str) -> eyre::Result<SynExt> {
         let (language, library) = self.load_language(lang)?;
 
@@ -105,18 +109,6 @@ impl Loader {
     }
 }
 
-impl Default for Loader {
-    fn default() -> Self {
-        let Ok(path) = std::env::var("GIT_REVIEW_TREESITTER_PATH") else {
-            return Self { paths: vec![] };
-        };
-
-        let paths = path.split(":").map(|e| PathBuf::from(e)).collect();
-
-        Loader { paths }
-    }
-}
-
 impl AsRef<Language> for SynExt {
     fn as_ref(&self) -> &Language {
         &self.language
@@ -151,9 +143,9 @@ impl SynExt {
 
 #[test]
 fn load_rust() {
-    let loader = Loader::default();
-    assert!(loader.load_language("rust").is_ok());
-    let (highlights, injections, locals) = loader.load_queries("rust");
+    let syntax = <crate::syntax::Syntax as crate::TestFixture>::fixture();
+    assert!(syntax.loader.load_language("rust").is_ok());
+    let (highlights, injections, locals) = syntax.loader.load_queries("rust");
 
     assert!(highlights.is_some());
     assert!(injections.is_some());

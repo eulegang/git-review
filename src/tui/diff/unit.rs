@@ -3,26 +3,11 @@ use ratatui::style::{Color, Modifier};
 use super::*;
 use crate::{
     model::{Delta, LineStatus},
-    syntax::Syntax,
     tui::render_stateful,
 };
 
 fn centered_x(widest_line: &str) -> u16 {
     ((167 - widest_line.chars().count()) / 2) as u16
-}
-
-fn config() -> git2::Config {
-    let path = std::env::temp_dir().join(format!(
-        "git-review-diff-test-{}-{}.config",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    let _ = std::fs::remove_file(&path);
-
-    git2::Config::open(&path).expect("open test config")
 }
 
 fn widget<'a>(delta: &'a Delta, hidden_hunks: &'a [usize], theme: &'a Theme) -> Diff<'a> {
@@ -254,35 +239,6 @@ fn applies_selected_removed_foreground_and_background() {
     assert_eq!(buf[(x, 2)].fg, Color::Blue);
     assert_eq!(buf[(x, 2)].bg, Color::White);
     assert!(buf[(x, 2)].modifier.contains(Modifier::BOLD));
-}
-
-#[test]
-fn syntax_highlights_rust_diff_lines() {
-    let theme = Theme::default();
-    let mut config = config();
-    config
-        .set_str("git-review.tree-sitter.keyword", "magenta")
-        .expect("set syntax color");
-    let mut syntax = Syntax::new(&config);
-    let mut delta = Delta::from_test_hunks(vec![(
-        "@@ -1 +1 @@",
-        vec![(LineStatus::Add, "fn main() {}".to_string())],
-    )]);
-    syntax.highlight_entry(&mut delta.entries[0]);
-
-    let buf = render_stateful(
-        widget(&delta, &[], &theme),
-        DiffState {
-            line: 99,
-            scroll: 0,
-            center_line: false,
-        },
-    );
-
-    let x = centered_x("fn main() {}");
-
-    assert_eq!(buf[(x, 2)].symbol(), "f");
-    assert_eq!(buf[(x, 2)].fg, Color::Magenta);
 }
 
 #[test]

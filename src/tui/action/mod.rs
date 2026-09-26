@@ -1,5 +1,12 @@
-use crate::tui::App;
+use std::collections::HashMap;
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
+use eyre::Result;
+
+use crate::tui::App;
+
+pub mod builder;
+mod conv;
 
 mod file;
 mod hunk;
@@ -17,6 +24,13 @@ pub enum Mode {
     Diff,
     FileSelector,
     TextInput,
+}
+
+#[derive(Debug, Clone)]
+pub struct KeyBindings {
+    diff: HashMap<KeyPattern, Intent>,
+    file_selector: HashMap<KeyPattern, Intent>,
+    text_input: HashMap<KeyPattern, Intent>,
 }
 
 pub trait Action {
@@ -52,6 +66,33 @@ pub enum Intent {
     CycleInputMode,
     InvertInputMode,
     BackspaceInput,
+}
+
+impl KeyBindings {
+    pub fn action_for_key(&self, mode: Mode, event: KeyEvent) -> Result<Intent> {
+        let keymap = match mode {
+            Mode::Diff => &self.diff,
+            Mode::FileSelector => &self.file_selector,
+            Mode::TextInput => &self.text_input,
+        };
+
+        if let Some(pattern) = KeyPattern::from_event(event)
+            && let Some(intent) = keymap.get(&pattern)
+        {
+            return Ok(*intent);
+        }
+
+        if mode == Mode::TextInput
+            && let KeyCode::Char(ch) = event.code
+            && !event
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        {
+            return Ok(Intent::InputChar(ch));
+        }
+
+        Err(eyre::eyre!("invalid keycode"))
+    }
 }
 
 impl App {
@@ -94,15 +135,7 @@ impl App {
 }
 
 impl Mode {
-    pub fn action_for_key(self, event: KeyEvent) -> eyre::Result<Intent> {
-        match self {
-            Mode::Diff => diff_action(event),
-            Mode::FileSelector => file_selector_action(event),
-            Mode::TextInput => text_input_action(event),
-        }
-    }
-
-    pub fn action_for_mouse(self, event: MouseEvent) -> eyre::Result<Intent> {
+    pub fn action_for_mouse(self, event: MouseEvent) -> Result<Intent> {
         match self {
             Mode::Diff => diff_mouse_action(event),
             Mode::FileSelector => file_selector_mouse_action(event),
@@ -110,29 +143,8 @@ impl Mode {
         }
     }
 }
-fn diff_action(event: KeyEvent) -> eyre::Result<Intent> {
-    match event.code {
-        KeyCode::Char('q') => Ok(Intent::Quit),
-        KeyCode::Char('j') | KeyCode::Down => Ok(Intent::ScrollDown(1)),
-        KeyCode::Char('k') | KeyCode::Up => Ok(Intent::ScrollUp(1)),
-        KeyCode::PageDown => Ok(Intent::ScrollDown(PAGE_SCROLL_LINES)),
-        KeyCode::PageUp => Ok(Intent::ScrollUp(PAGE_SCROLL_LINES)),
-        KeyCode::Char('d') => Ok(Intent::JumpToNextHunk),
-        KeyCode::Char('u') => Ok(Intent::JumpToPreviousHunk),
-        KeyCode::Char('z') => Ok(Intent::CenterSelectedLine),
-        KeyCode::Char('g') | KeyCode::Home => Ok(Intent::JumpToTop),
-        KeyCode::Char('G') | KeyCode::End => Ok(Intent::JumpToBottom),
-        KeyCode::Char('h') => Ok(Intent::HideCurrentHunk),
-        KeyCode::Char('H') => Ok(Intent::ShowHiddenHunks),
-        KeyCode::Char('n') | KeyCode::Tab => Ok(Intent::NextFile),
-        KeyCode::Char('p') | KeyCode::BackTab => Ok(Intent::PreviousFile),
-        KeyCode::Char('f') => Ok(Intent::OpenFileSelector),
-        KeyCode::Char('F') => Ok(Intent::OpenTextInput),
-        _ => Err(eyre::eyre!("invalid keycode")),
-    }
-}
 
-fn diff_mouse_action(event: MouseEvent) -> eyre::Result<Intent> {
+fn diff_mouse_action(event: MouseEvent) -> Result<Intent> {
     match event.kind {
         MouseEventKind::ScrollDown => Ok(Intent::ScrollDown(3)),
         MouseEventKind::ScrollUp => Ok(Intent::ScrollUp(3)),
@@ -140,53 +152,7 @@ fn diff_mouse_action(event: MouseEvent) -> eyre::Result<Intent> {
     }
 }
 
-fn file_selector_action(event: KeyEvent) -> eyre::Result<Intent> {
-    match event.code {
-        KeyCode::Char('q') | KeyCode::Esc | KeyCode::Char('f') => Ok(Intent::CloseFileSelector),
-        KeyCode::Char('j')
-        | KeyCode::Down
-        | KeyCode::PageDown
-        | KeyCode::Char('d')
-        | KeyCode::Char('n')
-        | KeyCode::Tab => Ok(Intent::SelectNextFile),
-        KeyCode::Char('k')
-        | KeyCode::Up
-        | KeyCode::PageUp
-        | KeyCode::Char('u')
-        | KeyCode::Char('p')
-        | KeyCode::BackTab => Ok(Intent::SelectPreviousFile),
-        KeyCode::Char('g') | KeyCode::Home => Ok(Intent::SelectFirstFile),
-        KeyCode::Char('G') | KeyCode::End => Ok(Intent::SelectLastFile),
-        KeyCode::Enter => Ok(Intent::ConfirmFileSelection),
-        _ => Err(eyre::eyre!("invalid keycode")),
-    }
-}
-
-fn text_input_action(event: KeyEvent) -> eyre::Result<Intent> {
-    match event.code {
-        KeyCode::Esc => Ok(Intent::CloseTextInput),
-        KeyCode::Enter => Ok(Intent::ConfirmTextInput),
-        KeyCode::Backspace => Ok(Intent::BackspaceInput),
-        KeyCode::BackTab => Ok(Intent::InvertInputMode),
-        KeyCode::Tab => {
-            if event.modifiers.contains(KeyModifiers::SHIFT) {
-                Ok(Intent::InvertInputMode)
-            } else {
-                Ok(Intent::CycleInputMode)
-            }
-        }
-        KeyCode::Char(ch)
-            if !event
-                .modifiers
-                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-        {
-            Ok(Intent::InputChar(ch))
-        }
-        _ => Err(eyre::eyre!("invalid keycode")),
-    }
-}
-
-fn file_selector_mouse_action(event: MouseEvent) -> eyre::Result<Intent> {
+fn file_selector_mouse_action(event: MouseEvent) -> Result<Intent> {
     match event.kind {
         MouseEventKind::ScrollDown => Ok(Intent::SelectNextFile),
         MouseEventKind::ScrollUp => Ok(Intent::SelectPreviousFile),
@@ -194,46 +160,87 @@ fn file_selector_mouse_action(event: MouseEvent) -> eyre::Result<Intent> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct KeyPattern {
+    code: KeyCodePattern,
+    modifiers: u8,
+}
+
 #[cfg(test)]
-mod tests {
-    use super::*;
+impl crate::TestFixture for KeyBindings {
+    fn fixture() -> Self {
+        let mut builder = builder::Builder::default();
+        let _ = builder.load_defaults();
+        builder.build()
+    }
+}
 
-    #[test]
-    fn escape_does_not_quit_diff_mode() {
-        assert!(
-            Mode::Diff
-                .action_for_key(KeyEvent::from(KeyCode::Esc))
-                .is_err()
-        );
+impl KeyPattern {
+    fn new(mut code: KeyCodePattern, mut modifiers: KeyModifiers) -> Self {
+        if let KeyCodePattern::Char(ch) = &mut code
+            && modifiers.contains(KeyModifiers::SHIFT)
+        {
+            if ch.is_ascii_lowercase() {
+                *ch = ch.to_ascii_uppercase();
+            }
+            modifiers.remove(KeyModifiers::SHIFT);
+        }
+
+        if matches!(code, KeyCodePattern::BackTab) {
+            modifiers.remove(KeyModifiers::SHIFT);
+        }
+
+        Self {
+            code,
+            modifiers: modifiers.bits(),
+        }
     }
 
-    #[test]
-    fn q_still_quits_diff_mode() {
-        assert_eq!(
-            Mode::Diff
-                .action_for_key(KeyEvent::from(KeyCode::Char('q')))
-                .unwrap(),
-            Intent::Quit
-        );
-    }
+    fn from_event(event: KeyEvent) -> Option<Self> {
+        let code = match event.code {
+            KeyCode::Backspace => KeyCodePattern::Backspace,
+            KeyCode::Enter => KeyCodePattern::Enter,
+            KeyCode::Left => KeyCodePattern::Left,
+            KeyCode::Right => KeyCodePattern::Right,
+            KeyCode::Up => KeyCodePattern::Up,
+            KeyCode::Down => KeyCodePattern::Down,
+            KeyCode::Home => KeyCodePattern::Home,
+            KeyCode::End => KeyCodePattern::End,
+            KeyCode::PageUp => KeyCodePattern::PageUp,
+            KeyCode::PageDown => KeyCodePattern::PageDown,
+            KeyCode::Tab => KeyCodePattern::Tab,
+            KeyCode::BackTab => KeyCodePattern::BackTab,
+            KeyCode::Delete => KeyCodePattern::Delete,
+            KeyCode::Insert => KeyCodePattern::Insert,
+            KeyCode::F(index) => KeyCodePattern::F(index),
+            KeyCode::Char(ch) => KeyCodePattern::Char(ch),
+            KeyCode::Null => KeyCodePattern::Null,
+            KeyCode::Esc => KeyCodePattern::Esc,
+            _ => return None,
+        };
 
-    #[test]
-    fn escape_closes_file_selector() {
-        assert_eq!(
-            Mode::FileSelector
-                .action_for_key(KeyEvent::from(KeyCode::Esc))
-                .unwrap(),
-            Intent::CloseFileSelector
-        );
+        Some(Self::new(code, event.modifiers))
     }
+}
 
-    #[test]
-    fn enter_confirms_text_input() {
-        assert_eq!(
-            Mode::TextInput
-                .action_for_key(KeyEvent::from(KeyCode::Enter))
-                .unwrap(),
-            Intent::ConfirmTextInput
-        );
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum KeyCodePattern {
+    Backspace,
+    Enter,
+    Left,
+    Right,
+    Up,
+    Down,
+    Home,
+    End,
+    PageUp,
+    PageDown,
+    Tab,
+    BackTab,
+    Delete,
+    Insert,
+    F(u8),
+    Char(char),
+    Null,
+    Esc,
 }

@@ -26,7 +26,7 @@ use crate::{
     syntax::Syntax,
 };
 
-mod action;
+pub mod action;
 mod diff;
 mod file_selector;
 mod filter_preview;
@@ -34,6 +34,7 @@ mod input;
 mod text_input;
 pub mod theme;
 
+pub use action::KeyBindings;
 pub use theme::Theme;
 
 #[derive(Debug)]
@@ -53,10 +54,11 @@ pub struct App {
     center_line: bool,
     should_quit: bool,
     theme: Theme,
+    keybindings: KeyBindings,
 }
 
 impl App {
-    pub fn new(model: Delta, syntax: Syntax, theme: Theme) -> Self {
+    pub fn new(model: Delta, syntax: Syntax, theme: Theme, keybindings: KeyBindings) -> Self {
         let len = model.len();
 
         Self {
@@ -75,6 +77,7 @@ impl App {
             center_line: false,
             should_quit: false,
             theme,
+            keybindings,
         }
     }
 
@@ -170,7 +173,7 @@ impl App {
             tracing::trace!(?app_event, "Processing event");
             let needs_redraw = match app_event {
                 AppEvent::Key(key) => {
-                    if let Ok(action) = self.mode.action_for_key(key) {
+                    if let Ok(action) = self.keybindings.action_for_key(self.mode, key) {
                         self.execute(action);
                         true
                     } else {
@@ -279,6 +282,8 @@ fn render(frame: &mut ratatui::Frame<'_>, app: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::TestFixture;
     use action::Intent;
     use ratatui::{backend::TestBackend, style::Color};
 
@@ -292,8 +297,9 @@ mod tests {
 
         let mut app = App::new(
             model,
-            Syntax::new(&git2::Config::new().unwrap()),
-            Theme::default(),
+            Syntax::fixture(),
+            Theme::fixture(),
+            KeyBindings::fixture(),
         );
         app.execute(Intent::OpenTextInput);
         for ch in "*beta*".chars() {
@@ -321,8 +327,9 @@ mod tests {
         let model = Delta::from_test_hunks(vec![]);
         let mut app = App::new(
             model,
-            Syntax::new(&git2::Config::new().unwrap()),
-            Theme::default(),
+            Syntax::fixture(),
+            Theme::fixture(),
+            KeyBindings::fixture(),
         );
         app.execute(Intent::OpenTextInput);
         app.execute(Intent::CycleInputMode);

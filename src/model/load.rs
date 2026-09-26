@@ -1,6 +1,5 @@
 use eyre::bail;
 use git2::{DiffDelta, DiffLine};
-use tracing::{debug, error};
 
 use super::*;
 
@@ -51,7 +50,7 @@ impl Delta {
 
         diff.print(git2::DiffFormat::Patch, |delta, _hunk, line| {
             if let Err(err) = collector.collect(repo, delta, line) {
-                error!(?err, "failed to collect diff");
+                tracing::error!(?err, "failed to collect diff");
             }
 
             true
@@ -112,7 +111,7 @@ impl PrintCollector {
                 };
 
                 let line = line.new_lineno().or(line.old_lineno()).unwrap_or_else(|| {
-                    error!(line.type = ?line.origin_value(), "missing lineno");
+                    tracing::error!(line.type = ?line.origin_value(), "missing lineno");
 
                     0
                 }) as usize;
@@ -136,7 +135,7 @@ impl PrintCollector {
 
                 self.name = delta.new_file().path().map(ToOwned::to_owned);
 
-                debug!(id = ?delta.old_file().id(), path = ?delta.old_file().path(), "loading old version");
+                tracing::debug!(id = ?delta.old_file().id(), path = ?delta.old_file().path(), "loading old version");
 
                 if let Ok(buf) = Buffer::load(repo, delta.old_file().id()) {
                     self.old = buf;
@@ -146,7 +145,7 @@ impl PrintCollector {
                     bail!("failed to load old file");
                 }
 
-                debug!(id = ?delta.new_file().id(), path = ?delta.new_file().path(), "loading new version");
+                tracing::debug!(id = ?delta.new_file().id(), path = ?delta.new_file().path(), "loading new version");
 
                 if let Ok(buf) = Buffer::load(repo, delta.new_file().id()) {
                     self.new = buf;

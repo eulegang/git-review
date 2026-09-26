@@ -27,3 +27,4 @@ tree-sitter = "0.26.0"
 globset = "0.4.20"
 regex = "1.13.1"
 frizbee = "0.13.0"
+mlua = { version = "0.10.3", features = ["lua54", "vendored", "send", "macros"] }
