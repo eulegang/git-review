@@ -3,7 +3,10 @@ use std::sync::{Arc, Mutex};
 use mlua::{Error, FromLua, UserData, Value};
 use ratatui::style::Color;
 
-use crate::config::parse_color;
+use crate::{
+    config::parse_color,
+    tui::action::{Intent, Mode},
+};
 
 use super::State;
 
@@ -15,7 +18,10 @@ impl UserData for RegState {}
 
 pub struct Api;
 
-pub struct TreesitterApi {}
+pub struct TreesitterApi;
+pub struct DiffKeys;
+pub struct SelectorKeys;
+pub struct FilterKeys;
 
 impl From<&Arc<Mutex<State>>> for RegState {
     fn from(value: &Arc<Mutex<State>>) -> Self {
@@ -27,7 +33,10 @@ impl From<&Arc<Mutex<State>>> for RegState {
 
 impl UserData for Api {
     fn add_fields<F: mlua::prelude::LuaUserDataFields<Self>>(fields: &mut F) {
-        fields.add_field_method_get("treesitter", |_, _| Ok(TreesitterApi {}));
+        fields.add_field_method_get("treesitter", |_, _| Ok(TreesitterApi));
+        fields.add_field_method_get("diff", |_, _| Ok(DiffKeys));
+        fields.add_field_method_get("selector", |_, _| Ok(SelectorKeys));
+        fields.add_field_method_get("filter", |_, _| Ok(FilterKeys));
     }
 
     fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
@@ -170,6 +179,225 @@ fn highlights(lua: &mlua::Lua, value: Value) -> mlua::Result<()> {
         let (ext, LuaColor(color)) = pair?;
         state.syntax.add_color(ext, color);
     }
+
+    Ok(())
+}
+
+impl UserData for DiffKeys {
+    fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
+        methods.add_function("bind", diff_bind);
+        methods.add_function("unbind", diff_unbind);
+        methods.add_function("clear", diff_clear);
+    }
+}
+
+fn diff_bind(lua: &mlua::Lua, value: Value) -> mlua::Result<()> {
+    let appdata = lua.app_data_ref::<RegState>().unwrap();
+    let mut state = appdata.state.lock().unwrap();
+
+    let Some(table) = value.as_table() else {
+        return Ok(());
+    };
+
+    for pair in table.pairs::<String, String>() {
+        let (key, action) = pair?;
+
+        let intent = match Intent::parse(Mode::Diff, &action) {
+            Ok(intent) => intent,
+            Err(err) => {
+                tracing::error!(?err, "failed to parse action");
+                continue;
+            }
+        };
+
+        if let Err(err) = state.keybindings.bind(Mode::Diff, &key, intent) {
+            tracing::error!(?err, "failed to unbind pattern");
+        }
+    }
+
+    Ok(())
+}
+
+fn diff_unbind(lua: &mlua::Lua, value: Value) -> mlua::Result<()> {
+    let appdata = lua.app_data_ref::<RegState>().unwrap();
+    let mut state = appdata.state.lock().unwrap();
+
+    if let Some(pattern) = value.as_str() {
+        if let Err(err) = state.keybindings.unbind(Mode::Diff, &pattern) {
+            tracing::error!(?err, "failed to unbind pattern");
+        }
+
+        Ok(())
+    } else if let Some(table) = value.as_table() {
+        for entry in table.sequence_values::<String>() {
+            let pattern = entry?;
+
+            if let Err(err) = state.keybindings.unbind(Mode::Diff, &pattern) {
+                tracing::error!(?err, "failed to unbind pattern");
+            }
+        }
+        Ok(())
+    } else {
+        return Err(mlua::Error::BadArgument {
+            to: Some("unbind".to_string()),
+            pos: 0,
+            name: Some("pattern".to_string()),
+            cause: Arc::new(mlua::Error::RuntimeError("".to_string())),
+        });
+    }
+}
+
+fn diff_clear(lua: &mlua::Lua, _value: Value) -> mlua::Result<()> {
+    let appdata = lua.app_data_ref::<RegState>().unwrap();
+    let mut state = appdata.state.lock().unwrap();
+
+    let _ = state.keybindings.clear(Mode::Diff);
+
+    Ok(())
+}
+
+impl UserData for SelectorKeys {
+    fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
+        methods.add_function("bind", selector_bind);
+        methods.add_function("unbind", selector_unbind);
+        methods.add_function("clear", selector_clear);
+    }
+}
+
+fn selector_bind(lua: &mlua::Lua, value: Value) -> mlua::Result<()> {
+    let appdata = lua.app_data_ref::<RegState>().unwrap();
+    let mut state = appdata.state.lock().unwrap();
+
+    let Some(table) = value.as_table() else {
+        return Ok(());
+    };
+
+    for pair in table.pairs::<String, String>() {
+        let (key, action) = pair?;
+
+        let intent = match Intent::parse(Mode::Diff, &action) {
+            Ok(intent) => intent,
+            Err(err) => {
+                tracing::error!(?err, "failed to parse action");
+                continue;
+            }
+        };
+
+        if let Err(err) = state.keybindings.bind(Mode::FileSelector, &key, intent) {
+            tracing::error!(?err, "failed to unbind pattern");
+        }
+    }
+
+    Ok(())
+}
+
+fn selector_unbind(lua: &mlua::Lua, value: Value) -> mlua::Result<()> {
+    let appdata = lua.app_data_ref::<RegState>().unwrap();
+    let mut state = appdata.state.lock().unwrap();
+
+    if let Some(pattern) = value.as_str() {
+        if let Err(err) = state.keybindings.unbind(Mode::FileSelector, &pattern) {
+            tracing::error!(?err, "failed to unbind pattern");
+        }
+
+        Ok(())
+    } else if let Some(table) = value.as_table() {
+        for entry in table.sequence_values::<String>() {
+            let pattern = entry?;
+
+            if let Err(err) = state.keybindings.unbind(Mode::FileSelector, &pattern) {
+                tracing::error!(?err, "failed to unbind pattern");
+            }
+        }
+        Ok(())
+    } else {
+        return Err(mlua::Error::BadArgument {
+            to: Some("unbind".to_string()),
+            pos: 0,
+            name: Some("pattern".to_string()),
+            cause: Arc::new(mlua::Error::RuntimeError("".to_string())),
+        });
+    }
+}
+
+fn selector_clear(lua: &mlua::Lua, _value: Value) -> mlua::Result<()> {
+    let appdata = lua.app_data_ref::<RegState>().unwrap();
+    let mut state = appdata.state.lock().unwrap();
+
+    let _ = state.keybindings.clear(Mode::FileSelector);
+
+    Ok(())
+}
+
+impl UserData for FilterKeys {
+    fn add_methods<M: mlua::prelude::LuaUserDataMethods<Self>>(methods: &mut M) {
+        methods.add_function("bind", filter_bind);
+        methods.add_function("unbind", filter_unbind);
+        methods.add_function("clear", filter_clear);
+    }
+}
+
+fn filter_bind(lua: &mlua::Lua, value: Value) -> mlua::Result<()> {
+    let appdata = lua.app_data_ref::<RegState>().unwrap();
+    let mut state = appdata.state.lock().unwrap();
+
+    let Some(table) = value.as_table() else {
+        return Ok(());
+    };
+
+    for pair in table.pairs::<String, String>() {
+        let (key, action) = pair?;
+
+        let intent = match Intent::parse(Mode::TextInput, &action) {
+            Ok(intent) => intent,
+            Err(err) => {
+                tracing::error!(?err, "failed to parse action");
+                continue;
+            }
+        };
+
+        if let Err(err) = state.keybindings.bind(Mode::TextInput, &key, intent) {
+            tracing::error!(?err, "failed to unbind pattern");
+        }
+    }
+
+    Ok(())
+}
+
+fn filter_unbind(lua: &mlua::Lua, value: Value) -> mlua::Result<()> {
+    let appdata = lua.app_data_ref::<RegState>().unwrap();
+    let mut state = appdata.state.lock().unwrap();
+
+    if let Some(pattern) = value.as_str() {
+        if let Err(err) = state.keybindings.unbind(Mode::TextInput, &pattern) {
+            tracing::error!(?err, "failed to unbind pattern");
+        }
+
+        Ok(())
+    } else if let Some(table) = value.as_table() {
+        for entry in table.sequence_values::<String>() {
+            let pattern = entry?;
+
+            if let Err(err) = state.keybindings.unbind(Mode::TextInput, &pattern) {
+                tracing::error!(?err, "failed to unbind pattern");
+            }
+        }
+        Ok(())
+    } else {
+        return Err(mlua::Error::BadArgument {
+            to: Some("unbind".to_string()),
+            pos: 0,
+            name: Some("pattern".to_string()),
+            cause: Arc::new(mlua::Error::RuntimeError("".to_string())),
+        });
+    }
+}
+
+fn filter_clear(lua: &mlua::Lua, _value: Value) -> mlua::Result<()> {
+    let appdata = lua.app_data_ref::<RegState>().unwrap();
+    let mut state = appdata.state.lock().unwrap();
+
+    let _ = state.keybindings.clear(Mode::TextInput);
 
     Ok(())
 }

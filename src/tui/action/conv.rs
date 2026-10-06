@@ -1,6 +1,8 @@
 use crossterm::event::KeyModifiers;
 
-use super::{KeyCodePattern, KeyPattern};
+use crate::tui::action::Mode;
+
+use super::{Intent, KeyCodePattern, KeyPattern};
 
 impl std::str::FromStr for KeyPattern {
     type Err = eyre::Report;
@@ -27,6 +29,44 @@ impl std::str::FromStr for KeyPattern {
             KeyCodePattern::Char(ch),
             KeyModifiers::empty(),
         ))
+    }
+}
+
+impl Intent {
+    pub fn parse(mode: Mode, s: &str) -> eyre::Result<Self> {
+        match mode {
+            Mode::Diff => match s {
+                "quit" => return Ok(Intent::Quit),
+                "top" => return Ok(Intent::JumpToTop),
+                "bottom" => return Ok(Intent::JumpToBottom),
+                "next" => return Ok(Intent::NextFile),
+                "prev" => return Ok(Intent::PreviousFile),
+                "next_hunk" => return Ok(Intent::JumpToBottom),
+                "prev_hunk" => return Ok(Intent::JumpToPreviousHunk),
+                "selector" => return Ok(Intent::OpenFileSelector),
+                "filter" => return Ok(Intent::OpenTextInput),
+
+                _ => (),
+            },
+            Mode::FileSelector => match s {
+                "quit" => return Ok(Intent::CloseFileSelector),
+                "next" => return Ok(Intent::SelectNextFile),
+                "prev" => return Ok(Intent::SelectPreviousFile),
+                "top" => return Ok(Intent::SelectFirstFile),
+                "bottom" => return Ok(Intent::SelectLastFile),
+
+                _ => (),
+            },
+            Mode::TextInput => match s {
+                "quit" => return Ok(Intent::CloseTextInput),
+                "next" => return Ok(Intent::CycleInputMode),
+                "invert" => return Ok(Intent::InvertInputMode),
+
+                _ => (),
+            },
+        };
+
+        Err(eyre::eyre!("failed to parse intent: {s}"))
     }
 }
 

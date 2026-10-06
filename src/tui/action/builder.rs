@@ -46,6 +46,18 @@ impl Builder {
         Ok(())
     }
 
+    pub fn clear(&mut self, mode: Mode) -> eyre::Result<()> {
+        let map = match mode {
+            Mode::Diff => &mut self.diff,
+            Mode::FileSelector => &mut self.file_selector,
+            Mode::TextInput => &mut self.text_input,
+        };
+
+        map.clear();
+
+        Ok(())
+    }
+
     pub fn load_defaults(&mut self) -> eyre::Result<()> {
         self.bind(Mode::Diff, "q", Intent::Quit)?;
         self.bind(Mode::Diff, "j", Intent::ScrollDown(1))?;
