@@ -9,6 +9,8 @@ mod tui;
 
 mod buf;
 
+mod ext;
+
 use cli::Cli;
 use eyre::{Context, Result};
 use git2::Repository;

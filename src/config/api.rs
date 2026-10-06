@@ -1,10 +1,14 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use mlua::{Error, FromLua, UserData, Value};
 use ratatui::style::Color;
 
 use crate::{
     config::parse_color,
+    ext::ExpandHome,
     tui::action::{Intent, Mode},
 };
 
@@ -130,7 +134,7 @@ impl UserData for TreesitterApi {
 }
 
 fn path(lua: &mlua::Lua, value: Value) -> mlua::Result<()> {
-    let mut paths = Vec::new();
+    let mut paths = Vec::<PathBuf>::new();
 
     let Some(table) = value.as_table() else {
         return Ok(());
@@ -145,7 +149,7 @@ fn path(lua: &mlua::Lua, value: Value) -> mlua::Result<()> {
     let appdata = lua.app_data_ref::<RegState>().unwrap();
     let mut state = appdata.state.lock().unwrap();
     for path in paths {
-        state.syntax.add_path(path);
+        state.syntax.add_path(path.expand_home());
     }
 
     Ok(())
