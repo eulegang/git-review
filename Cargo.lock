@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "gr-git-review"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "crossterm",
